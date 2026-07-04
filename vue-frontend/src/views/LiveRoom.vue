@@ -4,7 +4,7 @@
 
     <div class="live-room-body">
       <div class="live-room-left">
-        <LivePlayer />
+        <LivePlayer :default-room="roomId" />
         <DanmuPanel ref="danmuPanelRef" />
       </div>
 
@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { LiveWSClient } from '../utils/ws.js'
 import LivePlayer from '../components/LivePlayer.vue'
@@ -75,54 +75,54 @@ const chatText = ref('')
 const danmuPanelRef = ref(null)
 const systemLogRef = ref(null)
 
+ws.on('open', () => {
+  connected.value = true
+  ElMessage.success('已连接直播间')
+  systemLogRef.value?.addLog('system', `用户 ${userId.value} 进入直播间`)
+  fetchRoomState()
+})
+
+ws.on('close', () => {
+  connected.value = false
+  ElMessage.info('已断开连接')
+})
+
+ws.on('chat', (msg) => {
+  danmuPanelRef.value?.addDanmu(msg)
+})
+
+ws.on('gift', (msg) => {
+  const giftLabel = msg.data?.gift_type === 'rocket' ? '火箭 (100分)' : '小心心 (10分)'
+  systemLogRef.value?.addLog('gift', `${msg.data?.sender || msg.user_id} 送出 ${giftLabel}`)
+})
+
+ws.on('rank', (msg) => {
+  rankings.value = msg.data?.rankings || []
+})
+
+ws.on('online', (msg) => {
+  onlineCount.value = msg.data?.count || 0
+})
+
+ws.on('system', (msg) => {
+  const content = msg.data?.content || ''
+  systemLogRef.value?.addLog('system', content)
+  if (content.includes('限流')) {
+    fetchRoomState()
+  }
+})
+
 function connect() {
   if (!roomId.value || !userId.value) {
     ElMessage.warning('请输入 Room ID 和 User ID')
     return
   }
-
-  ws.on('open', () => {
-    connected.value = true
-    ElMessage.success('已连接直播间')
-    systemLogRef.value?.addLog('system', `用户 ${userId.value} 进入直播间`)
-  })
-
-  ws.on('close', () => {
-    connected.value = false
-    onlineCount.value = 0
-    rankings.value = []
-    ElMessage.info('已断开连接')
-  })
-
-  ws.on('chat', (msg) => {
-    danmuPanelRef.value?.addDanmu(msg)
-  })
-
-  ws.on('gift', (msg) => {
-    const giftName = msg.data?.gift_type === 'rocket' ? '🚀 火箭' : '❤️ 小心心'
-    systemLogRef.value?.addLog('gift', `${msg.data?.sender || msg.user_id} 送出 ${giftName} (${msg.data?.gift_score}分)`)
-  })
-
-  ws.on('rank', (msg) => {
-    rankings.value = msg.data?.rankings || []
-  })
-
-  ws.on('online', (msg) => {
-    onlineCount.value = msg.data?.count || 0
-  })
-
-  ws.on('system', (msg) => {
-    const content = msg.data?.content || ''
-    systemLogRef.value?.addLog('system', content)
-    if (content.includes('限流')) {
-      fetchLimitedCount()
-    }
-  })
-
   ws.connect(roomId.value, userId.value)
 }
 
 function disconnect() {
+  onlineCount.value = 0
+  rankings.value = []
   ws.disconnect()
 }
 
@@ -137,13 +137,21 @@ function sendGift(giftType) {
   ws.sendGift(roomId.value, userId.value, giftType)
 }
 
-async function fetchLimitedCount() {
+async function fetchRoomState() {
   try {
     const res = await fetch(`/api/room/state?room_id=${roomId.value}`)
     const data = await res.json()
-    limitedCount.value = data.data?.limited_count || 0
+    if (data.code === 0) {
+      onlineCount.value = data.data?.online_count || 0
+      limitedCount.value = data.data?.limited_count || 0
+    }
   } catch (e) {
     // ignore
   }
 }
+
+onBeforeUnmount(() => {
+  ws.disconnect()
+  ws.removeAllListeners()
+})
 </script>

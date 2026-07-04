@@ -2,9 +2,12 @@ export class LiveWSClient {
   constructor() {
     this.ws = null
     this.listeners = {}
+    this._bound = {}
   }
 
   connect(roomId, userId) {
+    this.disconnect()
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const url = `${protocol}//${host}/ws?room_id=${roomId}&user_id=${userId}`
@@ -27,6 +30,7 @@ export class LiveWSClient {
 
     this.ws.onclose = () => {
       this._emit('close')
+      this.ws = null
     }
 
     this.ws.onerror = (err) => {
@@ -65,6 +69,15 @@ export class LiveWSClient {
     this.listeners[event].push(callback)
   }
 
+  off(event, callback) {
+    if (!this.listeners[event]) return
+    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback)
+  }
+
+  removeAllListeners() {
+    this.listeners = {}
+  }
+
   _emit(event, data) {
     if (this.listeners[event]) {
       this.listeners[event].forEach(cb => cb(data))
@@ -73,8 +86,16 @@ export class LiveWSClient {
 
   disconnect() {
     if (this.ws) {
+      this.ws.onclose = null
+      this.ws.onerror = null
+      this.ws.onmessage = null
+      this.ws.onopen = null
       this.ws.close()
       this.ws = null
     }
+  }
+
+  isConnected() {
+    return this.ws && this.ws.readyState === WebSocket.OPEN
   }
 }
