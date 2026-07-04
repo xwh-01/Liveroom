@@ -2,7 +2,9 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
 
+	"liveroom-battle/dao"
 	"liveroom-battle/service"
 	"liveroom-battle/utils"
 
@@ -10,14 +12,18 @@ import (
 )
 
 type RoomController struct {
-	roomSvc *service.RoomService
-	rankSvc *service.RankService
+	roomSvc        *service.RoomService
+	rankSvc        *service.RankService
+	chatMessageDao *dao.ChatMessageDao
+	giftRecordDao  *dao.GiftRecordDao
 }
 
-func NewRoomController(roomSvc *service.RoomService, rankSvc *service.RankService) *RoomController {
+func NewRoomController(roomSvc *service.RoomService, rankSvc *service.RankService, chatMessageDao *dao.ChatMessageDao, giftRecordDao *dao.GiftRecordDao) *RoomController {
 	return &RoomController{
-		roomSvc: roomSvc,
-		rankSvc: rankSvc,
+		roomSvc:        roomSvc,
+		rankSvc:        rankSvc,
+		chatMessageDao: chatMessageDao,
+		giftRecordDao:  giftRecordDao,
 	}
 }
 
@@ -43,4 +49,34 @@ func (c *RoomController) GetRank(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, utils.Success(rankings))
+}
+
+func (c *RoomController) GetChatHistory(ctx *gin.Context) {
+	roomID := ctx.Param("room_id")
+	limitStr := ctx.DefaultQuery("limit", "50")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	messages, err := c.chatMessageDao.ListRecent(ctx.Request.Context(), roomID, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(messages))
+}
+
+func (c *RoomController) GetGiftHistory(ctx *gin.Context) {
+	roomID := ctx.Param("room_id")
+	limitStr := ctx.DefaultQuery("limit", "50")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	records, err := c.giftRecordDao.ListRecent(ctx.Request.Context(), roomID, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(records))
 }

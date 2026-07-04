@@ -19,5 +19,11 @@ func Setup(wsCtrl *controller.WSController, roomCtrl *controller.RoomController)
 		api.GET("/room/rank", roomCtrl.GetRank)
 	}
 
+	v1 := r.Group("/api/v1")
+	{
+		v1.GET("/rooms/:room_id/messages", roomCtrl.GetChatHistory)
+		v1.GET("/rooms/:room_id/gifts", roomCtrl.GetGiftHistory)
+	}
+
 	return r
 }

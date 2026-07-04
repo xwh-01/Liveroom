@@ -47,7 +47,28 @@
       </div>
 
       <GiftPanel :connected="connected" @send-gift="sendGift" />
+
+      <el-button size="small" @click="showChatHistory">历史弹幕</el-button>
+      <el-button size="small" @click="showGiftHistory">礼物流水</el-button>
     </footer>
+
+    <el-dialog v-model="historyVisible" :title="historyTitle" width="500px" destroy-on-close>
+      <div class="history-list" v-if="historyList.length > 0">
+        <div v-for="(item, idx) in historyList" :key="idx" class="history-item">
+          <span v-if="historyType === 'chat'">
+            <span class="h-time">{{ formatTime(item.created_at) }}</span>
+            <span class="h-user">{{ item.user_id }}</span>
+            {{ item.content }}
+          </span>
+          <span v-else>
+            <span class="h-time">{{ formatTime(item.created_at) }}</span>
+            <span class="h-user">{{ item.user_id }}</span>
+             送出 {{ item.gift_id }} ({{ item.score }}分)
+          </span>
+        </div>
+      </div>
+      <div v-else style="text-align:center;color:#909399;padding:20px 0;">暂无数据</div>
+    </el-dialog>
   </div>
 </template>
 
@@ -74,6 +95,11 @@ const chatText = ref('')
 
 const danmuPanelRef = ref(null)
 const systemLogRef = ref(null)
+
+const historyVisible = ref(false)
+const historyTitle = ref('')
+const historyType = ref('chat')
+const historyList = ref([])
 
 ws.on('open', () => {
   connected.value = true
@@ -148,6 +174,38 @@ async function fetchRoomState() {
   } catch (e) {
     // ignore
   }
+}
+
+async function showChatHistory() {
+  historyType.value = 'chat'
+  historyTitle.value = `房间 ${roomId.value} 弹幕历史`
+  try {
+    const res = await fetch(`/api/v1/rooms/${roomId.value}/messages?limit=50`)
+    const data = await res.json()
+    historyList.value = data.data || []
+  } catch (e) {
+    historyList.value = []
+  }
+  historyVisible.value = true
+}
+
+async function showGiftHistory() {
+  historyType.value = 'gift'
+  historyTitle.value = `房间 ${roomId.value} 礼物流水`
+  try {
+    const res = await fetch(`/api/v1/rooms/${roomId.value}/gifts?limit=50`)
+    const data = await res.json()
+    historyList.value = data.data || []
+  } catch (e) {
+    historyList.value = []
+  }
+  historyVisible.value = true
+}
+
+function formatTime(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toTimeString().slice(0, 8)
 }
 
 onBeforeUnmount(() => {

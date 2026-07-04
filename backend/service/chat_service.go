@@ -4,25 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
+	"liveroom-battle/dao"
 	"liveroom-battle/model"
 	"liveroom-battle/utils"
 )
 
 type ChatService struct {
-	rateLimitSvc *RateLimitService
-	hub          HubInterface
+	rateLimitSvc   *RateLimitService
+	hub            HubInterface
+	chatMessageDao *dao.ChatMessageDao
 }
 
-type HubInterface interface {
-	Broadcast(roomID string, message []byte)
-	SendToUser(roomID, userID string, message []byte)
-}
-
-func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface) *ChatService {
+func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, chatMessageDao *dao.ChatMessageDao) *ChatService {
 	return &ChatService{
-		rateLimitSvc: rateLimitSvc,
-		hub:          hub,
+		rateLimitSvc:   rateLimitSvc,
+		hub:            hub,
+		chatMessageDao: chatMessageDao,
 	}
 }
 
@@ -50,4 +49,19 @@ func (s *ChatService) HandleChat(ctx context.Context, client *model.Client, msg 
 	chatData.Timestamp = utils.NowStr()
 	payload, _ := model.NewResponse("chat", msg.RoomID, msg.UserID, chatData)
 	s.hub.Broadcast(msg.RoomID, payload)
+
+	s.saveChatMessage(ctx, msg.RoomID, msg.UserID, chatData.Content)
+}
+
+func (s *ChatService) saveChatMessage(ctx context.Context, roomID, userID, content string) {
+	record := &model.ChatMessage{
+		MessageID: utils.NewUUID(),
+		RoomID:    roomID,
+		UserID:    userID,
+		Content:   content,
+		CreatedAt: time.Now(),
+	}
+	if err := s.chatMessageDao.Save(ctx, record); err != nil {
+		slog.Error("save chat message failed", "err", err, "room_id", roomID, "user_id", userID)
+	}
 }
