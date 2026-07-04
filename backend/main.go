@@ -29,27 +29,13 @@ func main() {
 	rdb := common.InitRedis(config.Cfg.Redis)
 	redisDao := dao.NewRedisDao(rdb)
 
-	mysqlDB := common.InitMySQL(config.Cfg.MySQL)
-	if err := mysqlDB.AutoMigrate(
-		&model.Room{},
-		&model.ChatMessage{},
-		&model.GiftRecord{},
-	); err != nil {
-		slog.Error("auto migrate failed", "err", err)
-		os.Exit(1)
-	}
-
-	roomDao := dao.NewRoomDao(mysqlDB)
-	chatMessageDao := dao.NewChatMessageDao(mysqlDB)
-	giftRecordDao := dao.NewGiftRecordDao(mysqlDB)
-
 	roomHub := hub.NewRoomHub()
 
-	roomSvc := service.NewRoomService(redisDao, roomHub, roomDao)
+	roomSvc := service.NewRoomService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub, chatMessageDao)
-	giftSvc := service.NewGiftService(redisDao, roomHub, giftRecordDao)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub)
+	giftSvc := service.NewGiftService(redisDao, roomHub)
 
 	dispatcher := service.NewMessageDispatcher()
 	dispatcher.Register("chat", func(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -60,7 +46,7 @@ func main() {
 	})
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, rankSvc, chatMessageDao, giftRecordDao)
+	roomCtrl := controller.NewRoomController(roomSvc, rankSvc)
 
 	r := router.Setup(wsCtrl, roomCtrl)
 

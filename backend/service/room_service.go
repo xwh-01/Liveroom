@@ -11,17 +11,14 @@ import (
 
 type RoomService struct {
 	redisDao *dao.RedisDao
-	roomDao  *dao.RoomDao
 	hub      *hub.RoomHub
 }
 
-func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub, roomDao *dao.RoomDao) *RoomService {
-	return &RoomService{redisDao: redisDao, hub: hub, roomDao: roomDao}
+func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub) *RoomService {
+	return &RoomService{redisDao: redisDao, hub: hub}
 }
 
 func (s *RoomService) Join(ctx context.Context, client *model.Client) {
-	s.ensureRoomExists(ctx, client.RoomID)
-
 	s.hub.Join(client.RoomID, client)
 	if err := s.redisDao.AddOnlineUser(ctx, client.RoomID, client.UserID); err != nil {
 		slog.Error("add online user failed", "room_id", client.RoomID, "user_id", client.UserID, "err", err)
@@ -35,12 +32,6 @@ func (s *RoomService) Leave(ctx context.Context, client *model.Client) {
 		slog.Error("remove online user failed", "room_id", client.RoomID, "user_id", client.UserID, "err", err)
 	}
 	s.broadcastOnline(ctx, client.RoomID)
-}
-
-func (s *RoomService) ensureRoomExists(ctx context.Context, roomID string) {
-	if _, err := s.roomDao.CreateIfNotExists(ctx, roomID); err != nil {
-		slog.Error("ensure room exists failed", "room_id", roomID, "err", err)
-	}
 }
 
 func (s *RoomService) broadcastOnline(ctx context.Context, roomID string) {

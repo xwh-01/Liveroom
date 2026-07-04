@@ -4,21 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
 	"liveroom-battle/dao"
 	"liveroom-battle/model"
-	"liveroom-battle/utils"
 )
 
 type GiftService struct {
-	redisDao      *dao.RedisDao
-	hub           HubInterface
-	giftRecordDao *dao.GiftRecordDao
+	redisDao *dao.RedisDao
+	hub      HubInterface
 }
 
-func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, giftRecordDao *dao.GiftRecordDao) *GiftService {
-	return &GiftService{redisDao: redisDao, hub: hub, giftRecordDao: giftRecordDao}
+func NewGiftService(redisDao *dao.RedisDao, hub HubInterface) *GiftService {
+	return &GiftService{redisDao: redisDao, hub: hub}
 }
 
 func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -52,20 +49,4 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 
 	rankPayload, _ := model.NewResponse("rank", msg.RoomID, "", model.RankData{Rankings: rankings})
 	s.hub.Broadcast(msg.RoomID, rankPayload)
-
-	s.saveGiftRecord(ctx, msg.RoomID, msg.UserID, giftData.GiftType, score)
-}
-
-func (s *GiftService) saveGiftRecord(ctx context.Context, roomID, userID, giftType string, score int) {
-	record := &model.GiftRecord{
-		RecordID:  utils.NewUUID(),
-		RoomID:    roomID,
-		UserID:    userID,
-		GiftID:    giftType,
-		Score:     score,
-		CreatedAt: time.Now(),
-	}
-	if err := s.giftRecordDao.Save(ctx, record); err != nil {
-		slog.Error("save gift record failed", "err", err, "room_id", roomID, "user_id", userID)
-	}
 }

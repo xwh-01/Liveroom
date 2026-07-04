@@ -94,27 +94,3 @@ html, body, #app {
   padding-bottom: 8px;
   border-bottom: 1px solid #ebeef5;
 }
-
-.history-list {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.history-item {
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.h-time {
-  color: #c0c4cc;
-  font-size: 11px;
-  margin-right: 6px;
-}
-
-.h-user {
-  color: #409eff;
-  font-weight: 600;
-  margin-right: 6px;
-}
