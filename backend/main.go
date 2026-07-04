@@ -30,13 +30,12 @@ func main() {
 	redisDao := dao.NewRedisDao(rdb)
 
 	roomHub := hub.NewRoomHub()
-	metricsStore := model.NewMetricsStore()
 
-	roomSvc := service.NewRoomService(redisDao, roomHub, metricsStore)
+	roomSvc := service.NewRoomService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub, metricsStore)
-	giftSvc := service.NewGiftService(redisDao, roomHub, metricsStore)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao)
+	giftSvc := service.NewGiftService(redisDao, roomHub)
 
 	dispatcher := service.NewMessageDispatcher()
 	dispatcher.Register("chat", func(ctx context.Context, client *model.Client, msg *model.Message) {

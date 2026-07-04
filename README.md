@@ -51,7 +51,6 @@ LiveRoom-Battle/
 │   │   ├── room.go              # 房间状态 (API 响应)
 │   │   ├── gift.go              # 礼物配置
 │   │   ├── client.go            # WebSocket 客户端
-│   │   └── metrics.go           # 内存指标 (chat/gift 计数)
 │   ├── hub/
 │   │   └── room_hub.go          # 单机内存房间管理器
 │   ├── router/
@@ -165,11 +164,9 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 |------|------|------|
 | `room_id` | string | 房间 ID |
 | `online_count` | int | 当前在线连接数（来自 Hub 内存） |
-| `connection_count` | int | 同 online_count |
 | `limited_count` | int | 累计限流次数（来自 Redis） |
-| `chat_count` | int64 | 累计弹幕数（内存计数） |
-| `gift_count` | int64 | 累计礼物数（内存计数） |
-| `rankings` | array | 礼物积分 TOP10 |
+| `chat_count` | int64 | 累计弹幕数（来自 Redis） |
+| `gift_count` | int64 | 累计礼物数（来自 Redis） |
 
 ### 6. 可观测指标
 
@@ -177,8 +174,8 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 |------|------|----------|
 | 在线人数 | Hub 内存 | `/api/room/state` + WS `online` 推送 |
 | 限流次数 | Redis | `/api/room/state` |
-| chat_count | 内存 atomic | `/api/room/state` |
-| gift_count | 内存 atomic | `/api/room/state` |
+| chat_count | Redis | `/api/room/state` |
+| gift_count | Redis | `/api/room/state` |
 | 广播延迟 | slog 日志 | >10ms 时打印 `latency_us` |
 | 消息丢弃 | slog 日志 | send buffer 满时 Warn |
 
