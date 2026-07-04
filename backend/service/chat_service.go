@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"liveroom-battle/dao"
 	"liveroom-battle/model"
 	"liveroom-battle/utils"
 )
@@ -18,14 +17,14 @@ type HubInterface interface {
 type ChatService struct {
 	rateLimitSvc *RateLimitService
 	hub          HubInterface
-	redisDao     *dao.RedisDao
+	metricsStore *model.MetricsStore
 }
 
-func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, redisDao *dao.RedisDao) *ChatService {
+func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, metricsStore *model.MetricsStore) *ChatService {
 	return &ChatService{
 		rateLimitSvc: rateLimitSvc,
 		hub:          hub,
-		redisDao:     redisDao,
+		metricsStore: metricsStore,
 	}
 }
 
@@ -54,7 +53,5 @@ func (s *ChatService) HandleChat(ctx context.Context, client *model.Client, msg 
 	payload, _ := model.NewResponse("chat", msg.RoomID, msg.UserID, chatData)
 	s.hub.Broadcast(msg.RoomID, payload)
 
-	if _, err := s.redisDao.IncrChatCount(ctx, msg.RoomID); err != nil {
-		slog.Error("incr chat count failed", "err", err)
-	}
+	s.metricsStore.GetOrCreate(msg.RoomID).ChatCount.Add(1)
 }

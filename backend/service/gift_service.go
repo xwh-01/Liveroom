@@ -10,12 +10,13 @@ import (
 )
 
 type GiftService struct {
-	redisDao *dao.RedisDao
-	hub      HubInterface
+	redisDao     *dao.RedisDao
+	hub          HubInterface
+	metricsStore *model.MetricsStore
 }
 
-func NewGiftService(redisDao *dao.RedisDao, hub HubInterface) *GiftService {
-	return &GiftService{redisDao: redisDao, hub: hub}
+func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, metricsStore *model.MetricsStore) *GiftService {
+	return &GiftService{redisDao: redisDao, hub: hub, metricsStore: metricsStore}
 }
 
 func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -50,7 +51,5 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 	rankPayload, _ := model.NewResponse("rank", msg.RoomID, "", model.RankData{Rankings: rankings})
 	s.hub.Broadcast(msg.RoomID, rankPayload)
 
-	if _, err := s.redisDao.IncrGiftCount(ctx, msg.RoomID); err != nil {
-		slog.Error("incr gift count failed", "err", err)
-	}
+	s.metricsStore.GetOrCreate(msg.RoomID).GiftCount.Add(1)
 }

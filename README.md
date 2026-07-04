@@ -1,6 +1,6 @@
 # LiveRoom Battle
 
-直播间实时互动系统 —— 基于 WebSocket + Redis + MySQL 实现弹幕、礼物、排行榜、限流、在线人数统计及历史查询。
+直播间实时互动系统 V1.1 —— 基于 WebSocket + Redis 实现弹幕、礼物、排行榜、限流、在线人数统计。
 
 **注意：本项目不包含真实音视频直播功能（无 RTMP / HLS / WebRTC），页面中仅为假直播画面。**
 
@@ -11,7 +11,6 @@
 - Gin (HTTP 路由)
 - gorilla/websocket (WebSocket)
 - Redis (限流、排行榜、在线人数)
-- MySQL + GORM (弹幕记录、礼物流水、房间信息持久化)
 - TOML 配置
 - slog 日志
 
@@ -31,35 +30,28 @@ LiveRoom-Battle/
 │   ├── go.mod / go.sum
 │   ├── common/                  # 基础设施初始化
 │   │   ├── redis.go             # Redis 连接
-│   │   ├── mysql.go             # MySQL 连接 + GORM 连接池
 │   │   └── websocket.go         # WebSocket upgrader
 │   ├── config/
 │   │   ├── config.go            # 配置结构体
 │   │   └── config.toml          # TOML 配置文件
 │   ├── controller/              # HTTP / WebSocket 入口
 │   │   ├── ws_controller.go     # WebSocket 处理器
-│   │   └── room_controller.go   # 房间状态 / 排行榜 / 历史查询 HTTP 接口
+│   │   └── room_controller.go   # 房间状态 / 排行榜 HTTP 接口
 │   ├── service/                 # 业务逻辑层
-│   │   ├── chat_service.go      # 弹幕处理 (含 MySQL 落库)
-│   │   ├── gift_service.go      # 礼物处理 (含 MySQL 落库)
+│   │   ├── chat_service.go      # 弹幕处理
+│   │   ├── gift_service.go      # 礼物处理
 │   │   ├── rank_service.go      # 排行榜
-│   │   ├── room_service.go      # 房间管理 (含自动创建房间)
+│   │   ├── room_service.go      # 房间管理
 │   │   ├── rate_limit_service.go # 限流
-│   │   ├── dispatcher.go        # 消息分发器
-│   │   └── hub_interface.go     # Hub 接口定义
+│   │   └── dispatcher.go        # 消息分发器
 │   ├── dao/                     # 数据访问层
-│   │   ├── redis_dao.go         # Redis 操作封装
-│   │   ├── room_dao.go          # 房间 CRUD
-│   │   ├── chat_message_dao.go  # 弹幕持久化
-│   │   └── gift_record_dao.go   # 礼物流水持久化
+│   │   └── redis_dao.go         # Redis 操作封装
 │   ├── model/                   # 数据结构
 │   │   ├── message.go           # WS 消息类型
 │   │   ├── room.go              # 房间状态 (API 响应)
-│   │   ├── room_entity.go       # 房间实体 (MySQL)
-│   │   ├── chat_message.go      # 弹幕记录 (MySQL)
-│   │   ├── gift_record.go       # 礼物记录 (MySQL)
 │   │   ├── gift.go              # 礼物配置
-│   │   └── client.go            # WebSocket 客户端
+│   │   ├── client.go            # WebSocket 客户端
+│   │   └── metrics.go           # 内存指标 (chat/gift 计数)
 │   ├── hub/
 │   │   └── room_hub.go          # 单机内存房间管理器
 │   ├── router/
@@ -69,8 +61,7 @@ LiveRoom-Battle/
 │   ├── utils/
 │   │   ├── response.go          # 统一响应
 │   │   ├── keygen.go            # Redis key 生成
-│   │   ├── time.go              # 时间工具
-│   │   └── uuid.go              # UUID 生成
+│   │   └── time.go              # 时间工具
 │   └── bot/
 │       ├── go.mod
 │       └── main.go              # Bot 模拟用户脚本
@@ -88,6 +79,8 @@ LiveRoom-Battle/
 │   │   └── router/index.js      # 路由
 │   ├── package.json
 │   └── vite.config.js
+├── docs/
+│   └── benchmark.md             # 压测指南
 └── README.md
 ```
 
@@ -96,18 +89,15 @@ LiveRoom-Battle/
 ### 前提条件
 - Go 1.21+
 - Redis（监听 127.0.0.1:6379）
-- MySQL（监听 127.0.0.1:3306）
 - Node.js 18+
 
-### 1. 启动基础设施
+### 1. 启动 Redis
 
-确保 Redis 和 MySQL 已启动。MySQL 需要先创建数据库：
-
-```sql
-CREATE DATABASE IF NOT EXISTS liveroom DEFAULT CHARSET utf8mb4;
+```bash
+redis-server
 ```
 
-可修改 `backend/config/config.toml` 中的连接地址和账密。
+可修改 `backend/config/config.toml` 中的 Redis 连接地址。
 
 ### 2. 启动后端
 
@@ -116,7 +106,7 @@ cd backend
 go run main.go
 ```
 
-服务启动在 `http://localhost:8080`，启动时会自动迁移 MySQL 表结构（AutoMigrate）。
+服务启动在 `http://localhost:8080`。
 
 ### 3. 启动前端
 
@@ -135,52 +125,16 @@ cd backend/bot
 go run main.go
 ```
 
-Bot 会模拟 20 个用户连接直播间，随机发送弹幕和礼物。其中 4 个高频用户会触发限流。
+默认参数：20 用户、60 秒、chat 间隔 500ms、gift 间隔 1500ms。
 
-## V2 MySQL 持久化
-
-### 数据表
-
-V2 新增 3 张 MySQL 表，启动时通过 GORM AutoMigrate 自动创建：
-
-| 表 | 说明 |
-|---|------|
-| `rooms` | 直播间信息 (room_id, title, anchor_name, status) |
-| `chat_messages` | 弹幕记录 (message_id, room_id, user_id, content) |
-| `gift_records` | 礼物流水 (record_id, room_id, user_id, gift_id, score) |
-
-### 弹幕保存链路
-
-```
-用户发送弹幕 → WebSocket → RateLimit 检查 → Redis 限流判断
-→ [未超限] → 广播到房间 → 同步写入 MySQL chat_messages 表
-→ [超限]   → 仅通知本人，不入库
+```bash
+# 自定义参数
+go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_seconds=120 -chat_interval_ms=200 -gift_interval_ms=800
 ```
 
-### 礼物流水保存链路
+详细参数见 `docs/benchmark.md`。
 
-```
-用户送礼 → WebSocket → 验证礼物类型 → Redis ZIncrBy 更新积分
-→ 广播礼物消息 → 查询 Redis 排行榜 Top10 → 广播排行
-→ 同步写入 MySQL gift_records 表
-```
-
-### 房间自动创建
-
-用户首次加入直播间时，检测 `room_id` 是否存在，不存在则自动创建默认房间记录。
-
-### 历史查询接口
-
-| 接口 | 说明 |
-|------|------|
-| `GET /api/v1/rooms/:room_id/messages?limit=50` | 查询最近弹幕历史，按时间倒序 |
-| `GET /api/v1/rooms/:room_id/gifts?limit=50` | 查询最近礼物流水，按时间倒序 |
-
-前端页面底部的「历史弹幕」和「礼物流水」按钮可调用上述接口。
-
-> **注意**：当前 V2 使用同步落库。V3 将改用 RabbitMQ 异步落库，解耦写入路径。
-
-## MVP 功能
+## 功能
 
 ### 1. WebSocket 直播间连接
 - GET `/ws?room_id=xxx&user_id=xxx`
@@ -192,7 +146,7 @@ V2 新增 3 张 MySQL 表，启动时通过 GORM AutoMigrate 自动创建：
 - 发送 `chat` 类型消息
 - 基于 Redis 的限流：同一用户同一房间 1 秒最多 5 条
 - 触发限流只通知当前用户，不广播
-- 限流时 `limited_count` 加 1
+- 限流时 `limited_count` 加 1（Redis 持久化）
 
 ### 3. 礼物功能
 - 支持 `heart`（10分）和 `rocket`（100分）
@@ -205,7 +159,28 @@ V2 新增 3 张 MySQL 表，启动时通过 GORM AutoMigrate 自动创建：
 
 ### 5. 房间状态
 - HTTP GET `/api/room/state?room_id=xxx`
-- 返回 online_count、limited_count
+- 返回字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `room_id` | string | 房间 ID |
+| `online_count` | int | 当前在线连接数（来自 Hub 内存） |
+| `connection_count` | int | 同 online_count |
+| `limited_count` | int | 累计限流次数（来自 Redis） |
+| `chat_count` | int64 | 累计弹幕数（内存计数） |
+| `gift_count` | int64 | 累计礼物数（内存计数） |
+| `rankings` | array | 礼物积分 TOP10 |
+
+### 6. 可观测指标
+
+| 指标 | 存储 | 暴露方式 |
+|------|------|----------|
+| 在线人数 | Hub 内存 | `/api/room/state` + WS `online` 推送 |
+| 限流次数 | Redis | `/api/room/state` |
+| chat_count | 内存 atomic | `/api/room/state` |
+| gift_count | 内存 atomic | `/api/room/state` |
+| 广播延迟 | slog 日志 | >10ms 时打印 `latency_us` |
+| 消息丢弃 | slog 日志 | send buffer 满时 Warn |
 
 ## WebSocket 消息协议
 
@@ -239,14 +214,16 @@ V2 新增 3 张 MySQL 表，启动时通过 GORM AutoMigrate 自动创建：
 | 版本 | 功能 | 状态 |
 |------|------|------|
 | V1 | WebSocket + Redis 排行榜 + Redis 限流 | Done |
-| V2 | MySQL 保存弹幕记录和礼物流水 | Done |
+| V1.1 | 内存可观测指标、增强 /api/room/state、bot CLI 参数、压测指南 | Done |
+| V2 | MySQL 保存弹幕记录和礼物流水 | TODO |
 | V3 | RabbitMQ 异步落库，解耦写入 | TODO |
-| V4 | Prometheus + Grafana 监控在线人数、QPS、限流次数 | TODO |
-| V5 | 微服务拆分：chat-service、gift-service、rank-service | TODO |
+| V4 | Prometheus + Grafana 监控 | TODO |
+| V5 | 微服务拆分 | TODO |
 | V6 | 多实例 WebSocket，Redis Pub/Sub 跨节点广播 | TODO |
 
 ## 当前不包含
 
+- MySQL / PostgreSQL 持久化
 - RabbitMQ / Kafka 消息队列
 - 微服务拆分 / 服务注册发现
 - 登录注册 / 权限系统

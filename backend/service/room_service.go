@@ -10,12 +10,13 @@ import (
 )
 
 type RoomService struct {
-	redisDao *dao.RedisDao
-	hub      *hub.RoomHub
+	redisDao     *dao.RedisDao
+	hub          *hub.RoomHub
+	metricsStore *model.MetricsStore
 }
 
-func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub) *RoomService {
-	return &RoomService{redisDao: redisDao, hub: hub}
+func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub, metricsStore *model.MetricsStore) *RoomService {
+	return &RoomService{redisDao: redisDao, hub: hub, metricsStore: metricsStore}
 }
 
 func (s *RoomService) Join(ctx context.Context, client *model.Client) {
@@ -52,15 +53,8 @@ func (s *RoomService) GetRoomState(ctx context.Context, roomID string) *model.Ro
 		slog.Error("get limited count failed", "room_id", roomID, "err", err)
 	}
 
-	chatCount, err := s.redisDao.GetChatCount(ctx, roomID)
-	if err != nil {
-		slog.Error("get chat count failed", "room_id", roomID, "err", err)
-	}
-
-	giftCount, err := s.redisDao.GetGiftCount(ctx, roomID)
-	if err != nil {
-		slog.Error("get gift count failed", "room_id", roomID, "err", err)
-	}
+	chatCount := s.metricsStore.GetChatCount(roomID)
+	giftCount := s.metricsStore.GetGiftCount(roomID)
 
 	rankings, err := s.redisDao.GetTopRank(ctx, roomID, 10)
 	if err != nil {
@@ -71,11 +65,12 @@ func (s *RoomService) GetRoomState(ctx context.Context, roomID string) *model.Ro
 	}
 
 	return &model.RoomState{
-		RoomID:       roomID,
-		OnlineCount:  onlineCount,
-		LimitedCount: limitedCount,
-		ChatCount:    chatCount,
-		GiftCount:    giftCount,
-		Rankings:     rankings,
+		RoomID:          roomID,
+		OnlineCount:     onlineCount,
+		ConnectionCount: onlineCount,
+		LimitedCount:    limitedCount,
+		ChatCount:       chatCount,
+		GiftCount:       giftCount,
+		Rankings:        rankings,
 	}
 }

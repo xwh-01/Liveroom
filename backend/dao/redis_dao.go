@@ -95,37 +95,3 @@ func (d *RedisDao) RemoveRoomOnline(ctx context.Context, roomID string) {
 		slog.Error("failed to remove room online set", "room_id", roomID, "err", err)
 	}
 }
-
-func (d *RedisDao) IncrChatCount(ctx context.Context, roomID string) (int64, error) {
-	key := utils.ChatCountKey(roomID)
-	return d.rdb.Incr(ctx, key).Result()
-}
-
-func (d *RedisDao) GetChatCount(ctx context.Context, roomID string) (int64, error) {
-	key := utils.ChatCountKey(roomID)
-	val, err := d.rdb.Get(ctx, key).Result()
-	if err == redis.Nil {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseInt(val, 10, 64)
-}
-
-func (d *RedisDao) IncrGiftCount(ctx context.Context, roomID string) (int64, error) {
-	key := utils.GiftCountKey(roomID)
-	return d.rdb.Incr(ctx, key).Result()
-}
-
-func (d *RedisDao) GetGiftCount(ctx context.Context, roomID string) (int64, error) {
-	key := utils.GiftCountKey(roomID)
-	val, err := d.rdb.Get(ctx, key).Result()
-	if err == redis.Nil {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseInt(val, 10, 64)
-}

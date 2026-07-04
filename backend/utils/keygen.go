@@ -7,8 +7,6 @@ const (
 	GiftRankPrefix      = "gift:rank"
 	ChatRateLimitPrefix = "rate_limit:chat"
 	LimitedCountPrefix  = "room:limited"
-	ChatCountPrefix     = "room:chat_count"
-	GiftCountPrefix     = "room:gift_count"
 )
 
 func GiftRankKey(roomID string) string {
@@ -25,12 +23,4 @@ func LimitedCountKey(roomID string) string {
 
 func RoomOnlineKey(roomID string) string {
 	return fmt.Sprintf("%s:%s", RoomOnlinePrefix, roomID)
-}
-
-func ChatCountKey(roomID string) string {
-	return fmt.Sprintf("%s:%s", ChatCountPrefix, roomID)
-}
-
-func GiftCountKey(roomID string) string {
-	return fmt.Sprintf("%s:%s", GiftCountPrefix, roomID)
 }

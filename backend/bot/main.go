@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	host        = flag.String("host", "localhost:8080", "server host:port")
 	roomID      = flag.String("room_id", "1001", "room ID")
 	userCount   = flag.Int("user_count", 20, "number of simulated users")
 	durationSec = flag.Int("duration_seconds", 60, "test duration in seconds")
@@ -22,9 +23,10 @@ var (
 )
 
 type Stats struct {
+	Connected   int64
+	ConnErrors  int64
 	ChatSent    int64
 	GiftSent    int64
-	ConnErrors  int64
 	SendErrors  int64
 	Disconnects int64
 }
@@ -43,11 +45,10 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	host := "localhost:8080"
 	duration := time.Duration(*durationSec) * time.Second
 
 	fmt.Println("=== LiveRoom Battle Bot ===")
-	fmt.Printf("Target:      ws://%s/ws\n", host)
+	fmt.Printf("Target:      ws://%s/ws\n", *host)
 	fmt.Printf("Room:        %s\n", *roomID)
 	fmt.Printf("Users:       %d\n", *userCount)
 	fmt.Printf("Duration:    %s\n", duration)
@@ -61,7 +62,7 @@ func main() {
 	for i := 0; i < *userCount; i++ {
 		wg.Add(1)
 		userID := fmt.Sprintf("bot_%d", i+1)
-		go simulateUser(userID, host, duration, &wg)
+		go simulateUser(userID, duration, &wg)
 		time.Sleep(30 * time.Millisecond)
 	}
 
@@ -70,21 +71,22 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("=== Results ===")
-	fmt.Printf("Chat Sent:     %d\n", stats.ChatSent)
-	fmt.Printf("Gift Sent:     %d\n", stats.GiftSent)
-	fmt.Printf("Conn Errors:   %d\n", stats.ConnErrors)
-	fmt.Printf("Send Errors:   %d\n", stats.SendErrors)
-	fmt.Printf("Disconnects:   %d\n", stats.Disconnects)
-	fmt.Printf("Total Time:    %s\n", elapsed.Round(time.Millisecond))
+	fmt.Printf("连接成功:      %d\n", stats.Connected)
+	fmt.Printf("连接失败:      %d\n", stats.ConnErrors)
+	fmt.Printf("Chat 发送:     %d\n", stats.ChatSent)
+	fmt.Printf("Gift 发送:     %d\n", stats.GiftSent)
+	fmt.Printf("写入错误:      %d\n", stats.SendErrors)
+	fmt.Printf("断开连接:      %d\n", stats.Disconnects)
+	fmt.Printf("总耗时:        %s\n", elapsed.Round(time.Millisecond))
 	fmt.Println("==============")
 }
 
-func simulateUser(userID, host string, duration time.Duration, wg *sync.WaitGroup) {
+func simulateUser(userID string, duration time.Duration, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	u := url.URL{
 		Scheme: "ws",
-		Host:   host,
+		Host:   *host,
 		Path:   "/ws",
 	}
 	q := u.Query()
@@ -98,6 +100,7 @@ func simulateUser(userID, host string, duration time.Duration, wg *sync.WaitGrou
 		fmt.Printf("[%s] connect failed: %v\n", userID, err)
 		return
 	}
+	atomic.AddInt64(&stats.Connected, 1)
 	defer func() {
 		conn.Close()
 		atomic.AddInt64(&stats.Disconnects, 1)

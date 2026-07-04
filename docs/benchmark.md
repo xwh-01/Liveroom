@@ -38,30 +38,27 @@ go run main.go
 
 默认参数：20 用户连接 `room 1001`，运行 60 秒。
 
-#### 自定义压测参数
-
-```bash
-go run main.go \
-  -room_id=1001 \
-  -user_count=50 \
-  -duration_seconds=120 \
-  -chat_interval_ms=300 \
-  -gift_interval_ms=1000
-```
+#### Bot 参数
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
+| `-host` | `localhost:8080` | 服务器地址 |
 | `-room_id` | `1001` | 目标房间 ID |
 | `-user_count` | `20` | 模拟用户数 |
 | `-duration_seconds` | `60` | 压测持续时间（秒） |
 | `-chat_interval_ms` | `500` | 每个用户发弹幕间隔（毫秒） |
 | `-gift_interval_ms` | `1500` | 每个用户送礼间隔（毫秒） |
 
+Bot 使用独立的 chat ticker 和 gift ticker，按各自间隔独立发送，支持精确控制压测参数。
+
+运行结束后输出：连接成功人数、连接失败人数、chat 发送数、gift 发送数、写入错误数、断开连接数、总耗时。
+
 ## 示例压测命令
 
 ```bash
 # 高负载：100 用户、5 分钟、高频弹幕送礼
 go run main.go \
+  -host=localhost:8080 \
   -room_id=1001 \
   -user_count=100 \
   -duration_seconds=300 \
@@ -85,7 +82,7 @@ go run main.go \
 
 观察 `http://localhost:8080/api/room/state?room_id=1001` 中 `limited_count` 持续增长。
 
-前端 `<--SystemLog-->` 区会显示限流通知。
+前端 SystemLog 区会显示限流通知。
 
 ### 消息统计
 
