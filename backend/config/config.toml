@@ -1,0 +1,10 @@
+[server]
+port = 8080
+
+[redis]
+addr = "localhost:6379"
+password = ""
+db = 0
+
+[room]
+default_id = "1001"
