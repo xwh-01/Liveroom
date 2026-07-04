@@ -49,4 +49,8 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 
 	rankPayload, _ := model.NewResponse("rank", msg.RoomID, "", model.RankData{Rankings: rankings})
 	s.hub.Broadcast(msg.RoomID, rankPayload)
+
+	if _, err := s.redisDao.IncrGiftCount(ctx, msg.RoomID); err != nil {
+		slog.Error("incr gift count failed", "err", err)
+	}
 }

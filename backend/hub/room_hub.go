@@ -3,6 +3,7 @@ package hub
 import (
 	"log/slog"
 	"sync"
+	"time"
 
 	"liveroom-battle/model"
 )
@@ -44,6 +45,7 @@ func (h *RoomHub) Leave(roomID string, client *model.Client) {
 }
 
 func (h *RoomHub) Broadcast(roomID string, message []byte) {
+	start := time.Now()
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -51,12 +53,19 @@ func (h *RoomHub) Broadcast(roomID string, message []byte) {
 	if !ok {
 		return
 	}
+	count := len(clients)
+	dropped := 0
 	for client := range clients {
 		select {
 		case client.Send <- message:
 		default:
+			dropped++
 			slog.Warn("client send buffer full, dropping message", "user_id", client.UserID)
 		}
+	}
+	elapsed := time.Since(start)
+	if elapsed > 10*time.Millisecond {
+		slog.Info("broadcast done", "room_id", roomID, "clients", count, "dropped", dropped, "latency_us", elapsed.Microseconds())
 	}
 }
 

@@ -46,13 +46,36 @@ func (s *RoomService) broadcastOnline(ctx context.Context, roomID string) {
 
 func (s *RoomService) GetRoomState(ctx context.Context, roomID string) *model.RoomState {
 	onlineCount := s.hub.OnlineCount(roomID)
+
 	limitedCount, err := s.redisDao.GetLimitedCount(ctx, roomID)
 	if err != nil {
 		slog.Error("get limited count failed", "room_id", roomID, "err", err)
 	}
+
+	chatCount, err := s.redisDao.GetChatCount(ctx, roomID)
+	if err != nil {
+		slog.Error("get chat count failed", "room_id", roomID, "err", err)
+	}
+
+	giftCount, err := s.redisDao.GetGiftCount(ctx, roomID)
+	if err != nil {
+		slog.Error("get gift count failed", "room_id", roomID, "err", err)
+	}
+
+	rankings, err := s.redisDao.GetTopRank(ctx, roomID, 10)
+	if err != nil {
+		slog.Error("get rank failed", "room_id", roomID, "err", err)
+	}
+	if rankings == nil {
+		rankings = []model.RankItem{}
+	}
+
 	return &model.RoomState{
 		RoomID:       roomID,
 		OnlineCount:  onlineCount,
 		LimitedCount: limitedCount,
+		ChatCount:    chatCount,
+		GiftCount:    giftCount,
+		Rankings:     rankings,
 	}
 }

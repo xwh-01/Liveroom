@@ -34,7 +34,7 @@ func main() {
 	roomSvc := service.NewRoomService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao)
 	giftSvc := service.NewGiftService(redisDao, roomHub)
 
 	dispatcher := service.NewMessageDispatcher()
