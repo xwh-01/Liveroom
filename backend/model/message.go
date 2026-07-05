@@ -12,6 +12,7 @@ type Message struct {
 type ChatData struct {
 	Content   string `json:"content"`
 	Timestamp string `json:"timestamp,omitempty"`
+	Team      string `json:"team,omitempty"`
 }
 
 type GiftData struct {

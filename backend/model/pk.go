@@ -10,7 +10,7 @@ type PKState struct {
 	Winner           string `json:"winner"`
 	StartTime        string `json:"start_time"`
 	EndTime          string `json:"end_time"`
-	RemainingSeconds int    `json:"remaining_seconds"`
+	RemainingSeconds int64  `json:"remaining_seconds"`
 }
 
 type TeamData struct {

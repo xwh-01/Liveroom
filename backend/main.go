@@ -79,7 +79,7 @@ func main() {
 	pkSvc := service.NewPKService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc, pkSvc)
 	giftSvc := service.NewGiftService(redisDao, roomHub, persistSvc, pkSvc)
 
 	dispatcher := service.NewMessageDispatcher()

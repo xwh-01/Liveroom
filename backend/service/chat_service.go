@@ -21,14 +21,16 @@ type ChatService struct {
 	hub          HubInterface
 	redisDao     *dao.RedisDao
 	persistSvc   *PersistService
+	pkSvc        *PKService
 }
 
-func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, redisDao *dao.RedisDao, persistSvc *PersistService) *ChatService {
+func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, redisDao *dao.RedisDao, persistSvc *PersistService, pkSvc *PKService) *ChatService {
 	return &ChatService{
 		rateLimitSvc: rateLimitSvc,
 		hub:          hub,
 		redisDao:     redisDao,
 		persistSvc:   persistSvc,
+		pkSvc:        pkSvc,
 	}
 }
 
@@ -54,6 +56,12 @@ func (s *ChatService) HandleChat(ctx context.Context, client *model.Client, msg 
 	}
 
 	chatData.Timestamp = utils.NowStr()
+	if s.pkSvc != nil {
+		team, _ := s.redisDao.GetUserTeam(ctx, msg.RoomID, msg.UserID)
+		if team != "" {
+			chatData.Team = team
+		}
+	}
 	payload, _ := model.NewResponse("chat", msg.RoomID, msg.UserID, chatData)
 	s.hub.Broadcast(msg.RoomID, "chat", payload)
 

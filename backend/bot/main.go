@@ -20,6 +20,8 @@ var (
 	durationSec = flag.Int("duration_seconds", 60, "test duration in seconds")
 	chatMs      = flag.Int("chat_interval_ms", 500, "chat interval in ms")
 	giftMs      = flag.Int("gift_interval_ms", 1500, "gift interval in ms")
+	enablePK    = flag.Bool("enable_pk", true, "enable red-blue PK")
+	redRatio    = flag.Int("red_ratio", 50, "percentage of red team users")
 )
 
 type Stats struct {
@@ -29,6 +31,10 @@ type Stats struct {
 	GiftSent    int64
 	SendErrors  int64
 	Disconnects int64
+	RedUsers    int64
+	BlueUsers   int64
+	RedScore    int64
+	BlueScore   int64
 }
 
 type Message struct {
@@ -54,6 +60,7 @@ func main() {
 	fmt.Printf("Duration:    %s\n", duration)
 	fmt.Printf("Chat  every: %dms\n", *chatMs)
 	fmt.Printf("Gift  every: %dms\n", *giftMs)
+	fmt.Printf("PK Mode:     %v (red_ratio=%d%%)\n", *enablePK, *redRatio)
 	fmt.Println("===========================")
 
 	startTime := time.Now()
@@ -77,6 +84,8 @@ func main() {
 	fmt.Printf("Gift 发送:     %d\n", stats.GiftSent)
 	fmt.Printf("写入错误:      %d\n", stats.SendErrors)
 	fmt.Printf("断开连接:      %d\n", stats.Disconnects)
+	fmt.Printf("红队用户:      %d\n", stats.RedUsers)
+	fmt.Printf("蓝队用户:      %d\n", stats.BlueUsers)
 	fmt.Printf("总耗时:        %s\n", elapsed.Round(time.Millisecond))
 	fmt.Println("==============")
 }
@@ -105,6 +114,26 @@ func simulateUser(userID string, duration time.Duration, wg *sync.WaitGroup) {
 		conn.Close()
 		atomic.AddInt64(&stats.Disconnects, 1)
 	}()
+
+	if *enablePK {
+		team := "blue"
+		if rand.Intn(100) < *redRatio {
+			team = "red"
+		}
+		msg := Message{
+			Type:   "join_team",
+			RoomID: *roomID,
+			UserID: userID,
+			Data:   map[string]string{"team": team},
+		}
+		raw, _ := json.Marshal(msg)
+		conn.WriteMessage(websocket.TextMessage, raw)
+		if team == "red" {
+			atomic.AddInt64(&stats.RedUsers, 1)
+		} else {
+			atomic.AddInt64(&stats.BlueUsers, 1)
+		}
+	}
 
 	done := make(chan struct{})
 	go func() {

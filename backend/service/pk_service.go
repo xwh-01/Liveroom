@@ -146,11 +146,23 @@ func (s *PKService) GetPKState(ctx context.Context, roomID string) (*model.PKSta
 
 	if state.Status == "running" && state.EndTime != "" {
 		endTS, _ := strconv.ParseInt(state.EndTime, 10, 64)
-		remaining := int(endTS - time.Now().Unix())
+		remaining := endTS - time.Now().Unix()
 		if remaining < 0 {
 			remaining = 0
 		}
 		state.RemainingSeconds = remaining
+
+		if remaining == 0 {
+			state.Status = "ended"
+			if redScore > blueScore {
+				state.Winner = "red"
+			} else if blueScore > redScore {
+				state.Winner = "blue"
+			} else {
+				state.Winner = "draw"
+			}
+			s.redisDao.SetPKState(ctx, *state)
+		}
 	}
 
 	return state, nil
