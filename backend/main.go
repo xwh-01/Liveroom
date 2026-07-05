@@ -29,26 +29,14 @@ func main() {
 	rdb := common.InitRedis(config.Cfg.Redis)
 	redisDao := dao.NewRedisDao(rdb)
 
-	db, err := common.InitMySQL(config.Cfg.MySQL)
-	if err != nil {
-		slog.Error("failed to init mysql", "err", err)
-		os.Exit(1)
-	}
-	recordDao := dao.NewRecordDao(db)
-
 	roomHub := hub.NewRoomHub()
-
-	persistSvc := service.NewPersistService(recordDao, 10000)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	persistSvc.Start(ctx, 2)
 
 	roomSvc := service.NewRoomService(redisDao, roomHub)
 	roomManageSvc := service.NewRoomManageService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
-	giftSvc := service.NewGiftService(redisDao, roomHub, persistSvc)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao)
+	giftSvc := service.NewGiftService(redisDao, roomHub)
 
 	dispatcher := service.NewMessageDispatcher()
 	dispatcher.Register("chat", func(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -64,7 +52,7 @@ func main() {
 	}
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao, persistSvc)
+	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc)
 
 	r := router.Setup(wsCtrl, roomCtrl)
 

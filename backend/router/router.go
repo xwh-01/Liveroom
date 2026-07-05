@@ -17,10 +17,6 @@ func Setup(wsCtrl *controller.WSController, roomCtrl *controller.RoomController)
 	{
 		api.GET("/room/state", roomCtrl.GetRoomState)
 		api.GET("/room/rank", roomCtrl.GetRank)
-		api.GET("/room/chats", roomCtrl.ListRecentChats)
-		api.GET("/room/gifts", roomCtrl.ListRecentGifts)
-		api.GET("/room/persist/state", roomCtrl.GetPersistState)
-
 		api.GET("/rooms", roomCtrl.ListRooms)
 		api.GET("/rooms/:room_id", roomCtrl.GetRoom)
 	}
