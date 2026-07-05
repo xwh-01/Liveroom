@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: liveroom
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/sql/001_init_records.sql:/docker-entrypoint-initdb.d/001_init_records.sql
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

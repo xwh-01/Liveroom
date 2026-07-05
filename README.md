@@ -1,10 +1,10 @@
 # LiveRoom Battle
 
-直播间实时互动系统 V2 —— 基于 WebSocket + Redis 实现多房间弹幕、礼物、排行榜、限流、在线人数统计和 bot 压测。
+直播间实时互动系统 V3 —— 基于 WebSocket + Redis + MySQL 实现预置房间大厅、进入指定房间、弹幕、礼物、排行榜、限流、在线人数统计和 bot 压测。
 
-V2 新增：房间大厅、预置直播间、动态进入房间。
+V3 新增：MySQL 异步持久化弹幕记录和礼物流水。
 
-当前不包含：真实音视频直播、登录注册、普通用户创建房间、主播后台、MySQL、RabbitMQ、微服务。
+当前不包含：RabbitMQ、微服务、登录注册、主播后台、用户创建房间、真实音视频直播。
 
 **注意：本项目不包含真实音视频直播功能（无 RTMP / HLS / WebRTC），页面中仅为假直播画面。**
 
@@ -15,6 +15,8 @@ V2 新增：房间大厅、预置直播间、动态进入房间。
 - Gin (HTTP 路由)
 - gorilla/websocket (WebSocket)
 - Redis (限流、排行榜、在线人数、房间元数据)
+- MySQL (弹幕记录、礼物流水持久化)
+- database/sql + go-sql-driver/mysql
 - TOML 配置
 - slog 日志
 
@@ -190,6 +192,12 @@ V2 房间大厅 API：
 - `GET /api/rooms/:room_id` — 获取单个房间信息
 - `POST /api/admin/rooms/:room_id/close` — 关闭房间（开发环境用，无鉴权）
 
+V3 历史记录 API：
+
+- `GET /api/room/chats?room_id=xxx&limit=20` — 查询最近弹幕
+- `GET /api/room/gifts?room_id=xxx&limit=20` — 查询最近礼物流水
+- `GET /api/room/persist/state` — 查看异步落库队列状态
+
 ### 6. 可观测指标
 
 | 指标 | 存储 | 暴露方式 |
@@ -236,9 +244,9 @@ V2 房间大厅 API：
 | V1 | WebSocket + Redis 排行榜 + Redis 限流 | Done |
 | V1.1 | 内存可观测指标、增强 /api/room/state、bot CLI 参数、压测指南 | Done |
 | V1.2 | Broadcast 可观测日志、压测结果模板 benchmark-result.md | Done |
-| V2 | 房间大厅 + 预置直播间 + 动态进入房间 | Done |
-| V3 | MySQL 持久化弹幕记录和礼物流水 | TODO |
-| V4 | RabbitMQ 异步落库，解耦写入 | TODO |
+| V2 | 预置房间大厅 + 动态进入房间 | Done |
+| V3 | MySQL 异步持久化弹幕记录和礼物流水 | Done |
+| V4 | RabbitMQ 异步落库 | TODO |
 | V5 | Prometheus + Grafana 监控 | TODO |
 | V6 | 多实例 WebSocket，Redis Pub/Sub 跨节点广播 | TODO |
 
@@ -248,7 +256,6 @@ V2 房间大厅 API：
 - 主播后台
 - 登录注册 / 权限系统
 - 真实音视频直播（RTMP / HLS / WebRTC）
-- MySQL
 - RabbitMQ / Kafka 消息队列
 - 微服务拆分 / 服务注册发现
 - AI Agent

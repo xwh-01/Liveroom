@@ -95,6 +95,7 @@ Client -> WebSocket readPump -> MessageDispatcher.Dispatch("chat")
     -> [限流] SendToUser system message (仅通知自己)
     -> RoomHub.Broadcast chat -> 所有客户端 writePump -> Client
     -> RedisDao.IncrChatCount (Redis INCR)
+    -> PersistService.Submit(chat event) -> queue -> worker -> RecordDao -> MySQL
 ```
 
 ### 礼物流水
@@ -108,6 +109,22 @@ Client -> WebSocket readPump -> MessageDispatcher.Dispatch("gift")
     -> RedisDao.GetTopRank (Redis ZREVRANGE)
     -> RoomHub.Broadcast rank -> 所有客户端 writePump -> Client
     -> RedisDao.IncrGiftCount (Redis INCR)
+    -> PersistService.Submit(gift event) -> queue -> worker -> RecordDao -> MySQL
+```
+
+### 异步持久化流程
+
+```
+ChatService / GiftService
+  -> PersistService.Submit(event)
+    -> 非阻塞写入 chan (select + default)
+    -> 队列满: droppedCount++ + slog.Warn + return false
+  -> worker goroutine (x2)
+    -> 从 chan 消费
+    -> 按 Type 分发:
+       "chat" -> RecordDao.InsertChatRecord -> MySQL chat_records
+       "gift" -> RecordDao.InsertGiftRecord -> MySQL gift_records
+    -> 写入失败: failedCount++ + slog.Error + 继续循环
 ```
 
 ## 依赖关系
@@ -116,14 +133,17 @@ Client -> WebSocket readPump -> MessageDispatcher.Dispatch("gift")
 main.go (wire)
  ├── config.Load
  ├── common.InitRedis -> RedisDao
+ ├── common.InitMySQL -> RecordDao
+ ├── service.NewPersistService(recordDao, 10000)
+ │    └── persistSvc.Start(ctx, 2)
  ├── hub.NewRoomHub
  ├── service.NewRoomService(redisDao, roomHub)
  ├── service.NewRoomManageService(redisDao, roomHub)
  │    └── roomManageSvc.EnsureDefaultRooms(ctx)
- ├── service.NewChatService(rateLimitSvc, roomHub, redisDao)
- ├── service.NewGiftService(redisDao, roomHub)
+ ├── service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
+ ├── service.NewGiftService(redisDao, roomHub, persistSvc)
  ├── controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
- └── controller.NewRoomController(roomSvc, roomManageSvc, rankSvc)
+ └── controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao, persistSvc)
 ```
 
 ## 预置房间
