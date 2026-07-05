@@ -2,8 +2,8 @@
   <div class="live-room">
     <header class="live-room-header">
       <span class="header-back" @click="$router.push('/rooms')">◂ 大厅</span>
-      <span class="header-title">{{ roomTitle }}</span>
-      <span class="header-anchor">{{ roomAnchor }}</span>
+      <span class="header-title">{{ roomInfo.title || '加载中...' }}</span>
+      <span class="header-anchor">{{ roomInfo.anchor_name ? '主播: ' + roomInfo.anchor_name : '' }}</span>
     </header>
 
     <div v-if="roomError" class="room-error">
@@ -31,18 +31,6 @@
       </div>
 
       <footer class="live-room-footer">
-        <div class="connect-group">
-          <el-button
-            :type="connected ? 'danger' : 'primary'"
-            size="small"
-            @click="connected ? disconnect() : connect()"
-          >
-            {{ connected ? '断开' : '连接' }}
-          </el-button>
-          <span class="room-id-label">房间: {{ roomId }}</span>
-          <span class="user-id-label">用户: {{ userId }}</span>
-        </div>
-
         <div class="chat-group">
           <el-input
             v-model="chatText"
@@ -79,8 +67,7 @@ const props = defineProps({
 
 const ws = new LiveWSClient()
 
-const roomTitle = ref('加载中...')
-const roomAnchor = ref('')
+const roomInfo = ref({})
 const roomError = ref('')
 const userId = ref(getOrCreateUserId())
 const connected = ref(false)
@@ -95,7 +82,7 @@ const systemLogRef = ref(null)
 function getOrCreateUserId() {
   const stored = localStorage.getItem('liveroom_user_id')
   if (stored) return stored
-  const id = 'guest_' + Math.random().toString(36).slice(2, 10)
+  const id = 'guest_' + Math.random().toString(36).slice(2, 8)
   localStorage.setItem('liveroom_user_id', id)
   return id
 }
@@ -149,21 +136,16 @@ async function fetchRoomInfo() {
       roomError.value = '房间已关闭'
       return
     }
-    roomTitle.value = data.data.title || '直播间'
-    roomAnchor.value = data.data.anchor_name ? `主播: ${data.data.anchor_name}` : ''
+    roomInfo.value = data.data
   } catch (e) {
     roomError.value = '无法获取房间信息'
   }
 }
 
 function connect() {
+  if (!roomInfo.value?.room_id) return
+  if (connected.value) return
   ws.connect(props.roomId, userId.value)
-}
-
-function disconnect() {
-  onlineCount.value = 0
-  rankings.value = []
-  ws.disconnect()
 }
 
 function sendChat() {
@@ -240,9 +222,10 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-.room-id-label, .user-id-label {
-  font-size: 12px;
-  color: #909399;
-  margin-left: 8px;
+.chat-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
 }
 </style>
