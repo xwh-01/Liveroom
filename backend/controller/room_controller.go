@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"liveroom-battle/dao"
 	"liveroom-battle/model"
 	"liveroom-battle/service"
 	"liveroom-battle/utils"
@@ -16,18 +15,14 @@ type RoomController struct {
 	roomSvc       *service.RoomService
 	roomManageSvc *service.RoomManageService
 	rankSvc       *service.RankService
-	recordDao     *dao.RecordDao
-	persistSvc    *service.PersistService
 	pkSvc         *service.PKService
 }
 
-func NewRoomController(roomSvc *service.RoomService, roomManageSvc *service.RoomManageService, rankSvc *service.RankService, recordDao *dao.RecordDao, persistSvc *service.PersistService, pkSvc *service.PKService) *RoomController {
+func NewRoomController(roomSvc *service.RoomService, roomManageSvc *service.RoomManageService, rankSvc *service.RankService, pkSvc *service.PKService) *RoomController {
 	return &RoomController{
 		roomSvc:       roomSvc,
 		roomManageSvc: roomManageSvc,
 		rankSvc:       rankSvc,
-		recordDao:     recordDao,
-		persistSvc:    persistSvc,
 		pkSvc:         pkSvc,
 	}
 }
@@ -111,73 +106,6 @@ func (c *RoomController) CloseRoom(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, utils.Success(nil))
 }
 
-func (c *RoomController) ListRecentChats(ctx *gin.Context) {
-	roomID := ctx.Query("room_id")
-	if roomID == "" {
-		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
-		return
-	}
-	limit := 20
-	if l := ctx.Query("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil {
-			limit = parsed
-		}
-	}
-	if limit < 1 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	records, err := c.recordDao.ListRecentChatRecords(ctx.Request.Context(), roomID, limit)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
-		return
-	}
-	if records == nil {
-		records = []model.ChatRecord{}
-	}
-	ctx.JSON(http.StatusOK, utils.Success(records))
-}
-
-func (c *RoomController) ListRecentGifts(ctx *gin.Context) {
-	roomID := ctx.Query("room_id")
-	if roomID == "" {
-		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
-		return
-	}
-	limit := 20
-	if l := ctx.Query("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil {
-			limit = parsed
-		}
-	}
-	if limit < 1 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	records, err := c.recordDao.ListRecentGiftRecords(ctx.Request.Context(), roomID, limit)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
-		return
-	}
-	if records == nil {
-		records = []model.GiftRecord{}
-	}
-	ctx.JSON(http.StatusOK, utils.Success(records))
-}
-
-func (c *RoomController) GetPersistState(ctx *gin.Context) {
-	if c.persistSvc == nil {
-		ctx.JSON(http.StatusOK, utils.Success(nil))
-		return
-	}
-	state := c.persistSvc.State()
-	ctx.JSON(http.StatusOK, utils.Success(state))
-}
-
 func (c *RoomController) GetPKState(ctx *gin.Context) {
 	roomID := ctx.Query("room_id")
 	if roomID == "" {
@@ -193,7 +121,10 @@ func (c *RoomController) GetPKState(ctx *gin.Context) {
 }
 
 func (c *RoomController) StartPK(ctx *gin.Context) {
-	var req model.PKStartReq
+	var req struct {
+		RoomID          string `json:"room_id"`
+		DurationSeconds int    `json:"duration_seconds"`
+	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
 		return

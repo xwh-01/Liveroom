@@ -4,21 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
 	"liveroom-battle/dao"
 	"liveroom-battle/model"
 )
 
 type GiftService struct {
-	redisDao   *dao.RedisDao
-	hub        HubInterface
-	persistSvc *PersistService
-	pkSvc      *PKService
+	redisDao *dao.RedisDao
+	hub      HubInterface
+	pkSvc    *PKService
 }
 
-func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, persistSvc *PersistService, pkSvc *PKService) *GiftService {
-	return &GiftService{redisDao: redisDao, hub: hub, persistSvc: persistSvc, pkSvc: pkSvc}
+func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, pkSvc *PKService) *GiftService {
+	return &GiftService{redisDao: redisDao, hub: hub, pkSvc: pkSvc}
 }
 
 func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -57,30 +55,14 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 		slog.Error("incr gift count failed", "err", err)
 	}
 
-	if s.persistSvc != nil {
-		s.persistSvc.Submit(model.PersistEvent{
-			Type:      "gift",
-			RoomID:    msg.RoomID,
-			UserID:    msg.UserID,
-			GiftType:  giftData.GiftType,
-			GiftScore: score,
-			CreatedAt: time.Now(),
-		})
-	}
-
 	if s.pkSvc != nil {
 		pkState, err := s.pkSvc.AddScore(ctx, msg.RoomID, msg.UserID, score)
 		if err == nil && pkState != nil {
-			s.broadcastPKState(ctx, msg.RoomID)
+			pkPayload, _ := model.NewResponse("pk_state", msg.RoomID, "", pkState)
+			s.hub.Broadcast(msg.RoomID, "pk_state", pkPayload)
+		} else if err != nil {
+			reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{Content: "请先选择红队或蓝队"})
+			s.hub.Broadcast(msg.RoomID, "system", reply)
 		}
 	}
-}
-
-func (s *GiftService) broadcastPKState(ctx context.Context, roomID string) {
-	state, err := s.pkSvc.GetPKState(ctx, roomID)
-	if err != nil || state == nil {
-		return
-	}
-	payload, _ := model.NewResponse("pk_state", roomID, "", state)
-	s.hub.Broadcast(roomID, "pk_state", payload)
 }

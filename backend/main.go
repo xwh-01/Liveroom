@@ -19,7 +19,7 @@ import (
 	"liveroom-battle/service"
 )
 
-func handleJoinTeam(ctx context.Context, client *model.Client, msg *model.Message, pkSvc *service.PKService) {
+func handleJoinTeam(ctx context.Context, client *model.Client, msg *model.Message, pkSvc *service.PKService, hub *hub.RoomHub) {
 	var teamData model.TeamData
 	if err := json.Unmarshal(msg.Data, &teamData); err != nil {
 		slog.Error("unmarshal join_team failed", "err", err)
@@ -27,25 +27,20 @@ func handleJoinTeam(ctx context.Context, client *model.Client, msg *model.Messag
 	}
 	state, err := pkSvc.JoinTeam(ctx, msg.RoomID, msg.UserID, teamData.Team)
 	if err != nil {
-		reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{
-			Content: err.Error(),
-		})
+		reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{Content: err.Error()})
 		client.Send <- reply
 		return
 	}
-	systemMsg := ""
+	tag := "蓝队"
 	if teamData.Team == "red" {
-		systemMsg = "你已加入红队"
-	} else {
-		systemMsg = "你已加入蓝队"
+		tag = "红队"
 	}
-	reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{Content: systemMsg})
+	reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{Content: "你已加入" + tag})
 	client.Send <- reply
 
 	if state != nil {
 		payload, _ := model.NewResponse("pk_state", msg.RoomID, "", state)
-		pkSvc.GetPKState(ctx, msg.RoomID)
-		client.Send <- payload
+		hub.Broadcast(msg.RoomID, "pk_state", payload)
 	}
 }
 
@@ -60,27 +55,15 @@ func main() {
 	rdb := common.InitRedis(config.Cfg.Redis)
 	redisDao := dao.NewRedisDao(rdb)
 
-	db, err := common.InitMySQL(config.Cfg.MySQL)
-	if err != nil {
-		slog.Error("failed to init mysql", "err", err)
-		os.Exit(1)
-	}
-	recordDao := dao.NewRecordDao(db)
-
 	roomHub := hub.NewRoomHub()
-
-	persistSvc := service.NewPersistService(recordDao, 10000)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	persistSvc.Start(ctx, 2)
 
 	roomSvc := service.NewRoomService(redisDao, roomHub)
 	roomManageSvc := service.NewRoomManageService(redisDao, roomHub)
 	pkSvc := service.NewPKService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc, pkSvc)
-	giftSvc := service.NewGiftService(redisDao, roomHub, persistSvc, pkSvc)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, pkSvc)
+	giftSvc := service.NewGiftService(redisDao, roomHub, pkSvc)
 
 	dispatcher := service.NewMessageDispatcher()
 	dispatcher.Register("chat", func(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -90,7 +73,7 @@ func main() {
 		giftSvc.HandleGift(ctx, client, msg)
 	})
 	dispatcher.Register("join_team", func(ctx context.Context, client *model.Client, msg *model.Message) {
-		handleJoinTeam(ctx, client, msg, pkSvc)
+		handleJoinTeam(ctx, client, msg, pkSvc, roomHub)
 	})
 
 	if err := roomManageSvc.EnsureDefaultRooms(context.Background()); err != nil {
@@ -99,7 +82,7 @@ func main() {
 	}
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao, persistSvc, pkSvc)
+	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, pkSvc)
 
 	r := router.Setup(wsCtrl, roomCtrl)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
 	"liveroom-battle/dao"
 	"liveroom-battle/model"
@@ -20,16 +19,14 @@ type ChatService struct {
 	rateLimitSvc *RateLimitService
 	hub          HubInterface
 	redisDao     *dao.RedisDao
-	persistSvc   *PersistService
 	pkSvc        *PKService
 }
 
-func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, redisDao *dao.RedisDao, persistSvc *PersistService, pkSvc *PKService) *ChatService {
+func NewChatService(rateLimitSvc *RateLimitService, hub HubInterface, redisDao *dao.RedisDao, pkSvc *PKService) *ChatService {
 	return &ChatService{
 		rateLimitSvc: rateLimitSvc,
 		hub:          hub,
 		redisDao:     redisDao,
-		persistSvc:   persistSvc,
 		pkSvc:        pkSvc,
 	}
 }
@@ -67,15 +64,5 @@ func (s *ChatService) HandleChat(ctx context.Context, client *model.Client, msg 
 
 	if _, err := s.redisDao.IncrChatCount(ctx, msg.RoomID); err != nil {
 		slog.Error("incr chat count failed", "err", err)
-	}
-
-	if s.persistSvc != nil {
-		s.persistSvc.Submit(model.PersistEvent{
-			Type:      "chat",
-			RoomID:    msg.RoomID,
-			UserID:    msg.UserID,
-			Content:   chatData.Content,
-			CreatedAt: time.Now(),
-		})
 	}
 }
