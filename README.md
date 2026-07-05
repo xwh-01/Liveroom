@@ -4,7 +4,7 @@
 
 V2 新增：房间大厅、预置直播间、动态进入房间。
 
-当前不包含：真实音视频直播、登录注册、普通用户创建房间、主播后台、RabbitMQ、微服务。
+当前不包含：真实音视频直播、登录注册、普通用户创建房间、主播后台、MySQL、RabbitMQ、微服务。
 
 **注意：本项目不包含真实音视频直播功能（无 RTMP / HLS / WebRTC），页面中仅为假直播画面。**
 
@@ -14,9 +14,7 @@ V2 新增：房间大厅、预置直播间、动态进入房间。
 - Go 1.21+
 - Gin (HTTP 路由)
 - gorilla/websocket (WebSocket)
-- Redis (限流、排行榜、在线人数)
-- MySQL (弹幕记录、礼物流水持久化)
-- database/sql + go-sql-driver/mysql
+- Redis (限流、排行榜、在线人数、房间元数据)
 - TOML 配置
 - slog 日志
 
@@ -36,31 +34,29 @@ LiveRoom-Battle/
 │   ├── go.mod / go.sum
 │   ├── common/                  # 基础设施初始化
 │   │   ├── redis.go             # Redis 连接
-│   │   ├── mysql.go             # MySQL 连接
 │   │   └── websocket.go         # WebSocket upgrader
 │   ├── config/
 │   │   ├── config.go            # 配置结构体
 │   │   └── config.toml          # TOML 配置文件
 │   ├── controller/              # HTTP / WebSocket 入口
 │   │   ├── ws_controller.go     # WebSocket 处理器
-│   │   └── room_controller.go   # 房间状态 / 排行榜 / 流水查询 HTTP 接口
+│   │   └── room_controller.go   # HTTP 接口
 │   ├── service/                 # 业务逻辑层
 │   │   ├── chat_service.go      # 弹幕处理
 │   │   ├── gift_service.go      # 礼物处理
 │   │   ├── rank_service.go      # 排行榜
 │   │   ├── room_service.go      # 房间管理
+│   │   ├── room_manage_service.go # 房间大厅
 │   │   ├── rate_limit_service.go # 限流
-│   │   ├── dispatcher.go        # 消息分发器
-│   │   └── persist_service.go   # 异步落库服务
+│   │   └── dispatcher.go        # 消息分发器
 │   ├── dao/                     # 数据访问层
-│   │   ├── redis_dao.go         # Redis 操作封装
-│   │   └── record_dao.go        # MySQL 操作封装
+│   │   └── redis_dao.go         # Redis 操作封装
 │   ├── model/                   # 数据结构
 │   │   ├── message.go           # WS 消息类型
-│   │   ├── room.go              # 房间状态 (API 响应)
+│   │   ├── room.go              # 房间状态
+│   │   ├── room_meta.go         # 房间元数据
 │   │   ├── gift.go              # 礼物配置
-│   │   ├── client.go            # WebSocket 客户端
-│   │   └── record.go            # 持久化记录模型
+│   │   └── client.go            # WebSocket 客户端
 │   ├── hub/
 │   │   └── room_hub.go          # 单机内存房间管理器
 │   ├── router/
@@ -71,8 +67,6 @@ LiveRoom-Battle/
 │   │   ├── response.go          # 统一响应
 │   │   ├── keygen.go            # Redis key 生成
 │   │   └── time.go              # 时间工具
-│   ├── sql/
-│   │   └── 001_init_records.sql # MySQL 建表脚本
 │   └── bot/
 │       ├── go.mod
 │       └── main.go              # Bot 模拟用户脚本
@@ -189,20 +183,6 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 | `limited_count` | int | 累计限流次数（来自 Redis） |
 | `chat_count` | int64 | 累计弹幕数（来自 Redis） |
 | `gift_count` | int64 | 累计礼物数（来自 Redis） |
-| `persist_dropped_count` | int64 | 异步落库丢弃次数（V2 新增） |
-
-### 6. MySQL 持久化弹幕和礼物流水（V2 新增）
-
-- chat 消息广播成功后，异步写入 MySQL `chat_records` 表
-- gift 消息处理成功后，异步写入 MySQL `gift_records` 表
-- 落库使用本机异步队列（默认队列大小 10000，2 个 worker）
-- 落库失败不影响 WebSocket 广播
-- 队列满时丢弃事件，记录 `dropped_persist_count` 并打印 warn 日志
-
-新增 HTTP 接口：
-
-- `GET /api/room/chats?room_id=xxx&limit=20` — 查询最近弹幕记录
-- `GET /api/room/gifts?room_id=xxx&limit=20` — 查询最近礼物流水
 
 V2 房间大厅 API：
 
@@ -210,7 +190,7 @@ V2 房间大厅 API：
 - `GET /api/rooms/:room_id` — 获取单个房间信息
 - `POST /api/admin/rooms/:room_id/close` — 关闭房间（开发环境用，无鉴权）
 
-### 7. 可观测指标
+### 6. 可观测指标
 
 | 指标 | 存储 | 暴露方式 |
 |------|------|----------|
@@ -218,9 +198,6 @@ V2 房间大厅 API：
 | 限流次数 | Redis | `/api/room/state` |
 | chat_count | Redis | `/api/room/state` |
 | gift_count | Redis | `/api/room/state` |
-| persist_dropped_count | PersistService 内存 | `/api/room/state` |
-| 弹幕流水 | MySQL | `/api/room/chats` |
-| 礼物流水 | MySQL | `/api/room/gifts` |
 | 广播延迟 | slog 日志 | >10ms 时打印 `latency_us` |
 | 消息丢弃 | slog 日志 | send buffer 满时 Warn |
 
@@ -246,7 +223,6 @@ V2 房间大厅 API：
 - **分层清晰**：controller → service → dao，各层职责明确
 - **依赖注入**：服务之间通过构造函数注入，不使用全局变量
 - **消息分发器**：可扩展的消息类型注册机制，方便增加新消息类型
-- **异步落库**：ChatService/GiftService -> PersistService queue -> Persist worker -> RecordDao -> MySQL，落库失败不影响实时广播
 - **Redis key 统一管理**：通过 `utils/keygen.go` 集中生成
 - **礼物配置集中**：礼物类型和分值在 `model/gift.go` 中管理
 - **RoomHub 接口化**：内存房间管理器有清晰接口，后续可升级为分布式
@@ -272,6 +248,7 @@ V2 房间大厅 API：
 - 主播后台
 - 登录注册 / 权限系统
 - 真实音视频直播（RTMP / HLS / WebRTC）
+- MySQL
 - RabbitMQ / Kafka 消息队列
 - 微服务拆分 / 服务注册发现
 - AI Agent

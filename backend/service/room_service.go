@@ -10,13 +10,12 @@ import (
 )
 
 type RoomService struct {
-	redisDao   *dao.RedisDao
-	hub        *hub.RoomHub
-	persistSvc *PersistService
+	redisDao *dao.RedisDao
+	hub      *hub.RoomHub
 }
 
-func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub, persistSvc *PersistService) *RoomService {
-	return &RoomService{redisDao: redisDao, hub: hub, persistSvc: persistSvc}
+func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub) *RoomService {
+	return &RoomService{redisDao: redisDao, hub: hub}
 }
 
 func (s *RoomService) Join(ctx context.Context, client *model.Client) {
@@ -64,18 +63,10 @@ func (s *RoomService) GetRoomState(ctx context.Context, roomID string) *model.Ro
 	}
 
 	return &model.RoomState{
-		RoomID:              roomID,
-		OnlineCount:         onlineCount,
-		LimitedCount:        limitedCount,
-		ChatCount:           chatCount,
-		GiftCount:           giftCount,
-		PersistDroppedCount: s.persistDroppedCount(),
+		RoomID:      roomID,
+		OnlineCount: onlineCount,
+		LimitedCount: limitedCount,
+		ChatCount:   chatCount,
+		GiftCount:   giftCount,
 	}
-}
-
-func (s *RoomService) persistDroppedCount() int64 {
-	if s.persistSvc == nil {
-		return 0
-	}
-	return s.persistSvc.DroppedCount()
 }

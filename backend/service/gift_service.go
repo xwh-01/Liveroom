@@ -4,20 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
 	"liveroom-battle/dao"
 	"liveroom-battle/model"
 )
 
 type GiftService struct {
-	redisDao   *dao.RedisDao
-	hub        HubInterface
-	persistSvc *PersistService
+	redisDao *dao.RedisDao
+	hub      HubInterface
 }
 
-func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, persistSvc *PersistService) *GiftService {
-	return &GiftService{redisDao: redisDao, hub: hub, persistSvc: persistSvc}
+func NewGiftService(redisDao *dao.RedisDao, hub HubInterface) *GiftService {
+	return &GiftService{redisDao: redisDao, hub: hub}
 }
 
 func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -54,16 +52,5 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 
 	if _, err := s.redisDao.IncrGiftCount(ctx, msg.RoomID); err != nil {
 		slog.Error("incr gift count failed", "err", err)
-	}
-
-	if s.persistSvc != nil {
-		s.persistSvc.Submit(model.PersistEvent{
-			Type:      "gift",
-			RoomID:    msg.RoomID,
-			UserID:    msg.UserID,
-			GiftType:  giftData.GiftType,
-			GiftScore: score,
-			CreatedAt: time.Now(),
-		})
 	}
 }
