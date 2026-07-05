@@ -19,6 +19,14 @@
         </div>
 
         <div class="live-room-right">
+          <PKPanel
+            ref="pkPanelRef"
+            :ws="ws"
+            :room-id="roomId"
+            :user-id="userId"
+            :connected="connected"
+            @team-changed="onTeamChanged"
+          />
           <RoomStats
             :online-count="onlineCount"
             :limited-count="limitedCount"
@@ -55,6 +63,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { LiveWSClient } from '../utils/ws.js'
 import LivePlayer from '../components/LivePlayer.vue'
+import PKPanel from '../components/PKPanel.vue'
 import DanmuPanel from '../components/DanmuPanel.vue'
 import GiftPanel from '../components/GiftPanel.vue'
 import RankBoard from '../components/RankBoard.vue'
@@ -77,6 +86,7 @@ const rankings = ref([])
 const chatText = ref('')
 
 const danmuPanelRef = ref(null)
+const pkPanelRef = ref(null)
 const systemLogRef = ref(null)
 
 function getOrCreateUserId() {
@@ -116,13 +126,24 @@ ws.on('online', (msg) => {
   onlineCount.value = msg.data?.count || 0
 })
 
+ws.on('pk_state', (msg) => {
+  if (msg.data) {
+    pkPanelRef.value?.onPKState(msg.data)
+  }
+})
+
 ws.on('system', (msg) => {
   const content = msg.data?.content || ''
+  pkPanelRef.value?.onSystem(msg)
   systemLogRef.value?.addLog('system', content)
   if (content.includes('限流')) {
     fetchRoomState()
   }
 })
+
+function onTeamChanged(team) {
+  systemLogRef.value?.addLog('system', `加入了${team === 'red' ? '红队' : '蓝队'}`)
+}
 
 async function fetchRoomInfo() {
   try {

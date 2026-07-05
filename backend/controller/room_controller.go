@@ -18,15 +18,17 @@ type RoomController struct {
 	rankSvc       *service.RankService
 	recordDao     *dao.RecordDao
 	persistSvc    *service.PersistService
+	pkSvc         *service.PKService
 }
 
-func NewRoomController(roomSvc *service.RoomService, roomManageSvc *service.RoomManageService, rankSvc *service.RankService, recordDao *dao.RecordDao, persistSvc *service.PersistService) *RoomController {
+func NewRoomController(roomSvc *service.RoomService, roomManageSvc *service.RoomManageService, rankSvc *service.RankService, recordDao *dao.RecordDao, persistSvc *service.PersistService, pkSvc *service.PKService) *RoomController {
 	return &RoomController{
 		roomSvc:       roomSvc,
 		roomManageSvc: roomManageSvc,
 		rankSvc:       rankSvc,
 		recordDao:     recordDao,
 		persistSvc:    persistSvc,
+		pkSvc:         pkSvc,
 	}
 }
 
@@ -174,4 +176,72 @@ func (c *RoomController) GetPersistState(ctx *gin.Context) {
 	}
 	state := c.persistSvc.State()
 	ctx.JSON(http.StatusOK, utils.Success(state))
+}
+
+func (c *RoomController) GetPKState(ctx *gin.Context) {
+	roomID := ctx.Query("room_id")
+	if roomID == "" {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	state, err := c.pkSvc.GetPKState(ctx.Request.Context(), roomID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(state))
+}
+
+func (c *RoomController) StartPK(ctx *gin.Context) {
+	var req model.PKStartReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	state, err := c.pkSvc.StartPK(ctx.Request.Context(), req.RoomID, req.DurationSeconds)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, utils.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(state))
+}
+
+func (c *RoomController) EndPK(ctx *gin.Context) {
+	var req struct {
+		RoomID string `json:"room_id"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	state, err := c.pkSvc.EndPK(ctx.Request.Context(), req.RoomID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, utils.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(state))
+}
+
+func (c *RoomController) GetPKRank(ctx *gin.Context) {
+	roomID := ctx.Query("room_id")
+	team := ctx.Query("team")
+	if roomID == "" || team == "" {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	topN := 10
+	if n := ctx.Query("top_n"); n != "" {
+		if parsed, err := strconv.Atoi(n); err == nil {
+			topN = parsed
+		}
+	}
+	items, err := c.pkSvc.GetTeamRank(ctx.Request.Context(), roomID, team, topN)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	if items == nil {
+		items = []model.RankItem{}
+	}
+	ctx.JSON(http.StatusOK, utils.Success(items))
 }

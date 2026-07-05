@@ -11,6 +11,11 @@ const (
 	GiftCountPrefix     = "room:gift_count"
 	RoomMetaPrefix      = "room:meta"
 	LiveRoomsKey        = "room:live"
+	PKStatePrefix       = "room:pk:state"
+	PKScorePrefix       = "room:pk:score"
+	PKUsersPrefix       = "room:pk:users"
+	PKUserTeamPrefix    = "room:pk:user:team"
+	PKTeamRankPrefix    = "room:pk:rank"
 )
 
 func GiftRankKey(roomID string) string {
@@ -43,4 +48,32 @@ func RoomMetaKey(roomID string) string {
 
 func LiveRoomsSetKey() string {
 	return LiveRoomsKey
+}
+
+func PKStateKey(roomID string) string {
+	return fmt.Sprintf("%s:%s", PKStatePrefix, roomID)
+}
+
+func PKRedScoreKey(roomID string) string {
+	return fmt.Sprintf("%s:%s:red", PKScorePrefix, roomID)
+}
+
+func PKBlueScoreKey(roomID string) string {
+	return fmt.Sprintf("%s:%s:blue", PKScorePrefix, roomID)
+}
+
+func PKRedUsersKey(roomID string) string {
+	return fmt.Sprintf("%s:%s:red", PKUsersPrefix, roomID)
+}
+
+func PKBlueUsersKey(roomID string) string {
+	return fmt.Sprintf("%s:%s:blue", PKUsersPrefix, roomID)
+}
+
+func PKUserTeamKey(roomID, userID string) string {
+	return fmt.Sprintf("%s:%s:%s:team", PKUserTeamPrefix, roomID, userID)
+}
+
+func PKTeamRankKey(roomID, team string) string {
+	return fmt.Sprintf("%s:%s:%s", PKTeamRankPrefix, roomID, team)
 }

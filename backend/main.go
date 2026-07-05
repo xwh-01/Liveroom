@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,6 +18,36 @@ import (
 	"liveroom-battle/router"
 	"liveroom-battle/service"
 )
+
+func handleJoinTeam(ctx context.Context, client *model.Client, msg *model.Message, pkSvc *service.PKService) {
+	var teamData model.TeamData
+	if err := json.Unmarshal(msg.Data, &teamData); err != nil {
+		slog.Error("unmarshal join_team failed", "err", err)
+		return
+	}
+	state, err := pkSvc.JoinTeam(ctx, msg.RoomID, msg.UserID, teamData.Team)
+	if err != nil {
+		reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{
+			Content: err.Error(),
+		})
+		client.Send <- reply
+		return
+	}
+	systemMsg := ""
+	if teamData.Team == "red" {
+		systemMsg = "你已加入红队"
+	} else {
+		systemMsg = "你已加入蓝队"
+	}
+	reply, _ := model.NewResponse("system", msg.RoomID, "", model.SystemData{Content: systemMsg})
+	client.Send <- reply
+
+	if state != nil {
+		payload, _ := model.NewResponse("pk_state", msg.RoomID, "", state)
+		pkSvc.GetPKState(ctx, msg.RoomID)
+		client.Send <- payload
+	}
+}
 
 func main() {
 	common.InitLogger()
@@ -45,10 +76,11 @@ func main() {
 
 	roomSvc := service.NewRoomService(redisDao, roomHub)
 	roomManageSvc := service.NewRoomManageService(redisDao, roomHub)
+	pkSvc := service.NewPKService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
 	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
-	giftSvc := service.NewGiftService(redisDao, roomHub, persistSvc)
+	giftSvc := service.NewGiftService(redisDao, roomHub, persistSvc, pkSvc)
 
 	dispatcher := service.NewMessageDispatcher()
 	dispatcher.Register("chat", func(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -57,6 +89,9 @@ func main() {
 	dispatcher.Register("gift", func(ctx context.Context, client *model.Client, msg *model.Message) {
 		giftSvc.HandleGift(ctx, client, msg)
 	})
+	dispatcher.Register("join_team", func(ctx context.Context, client *model.Client, msg *model.Message) {
+		handleJoinTeam(ctx, client, msg, pkSvc)
+	})
 
 	if err := roomManageSvc.EnsureDefaultRooms(context.Background()); err != nil {
 		slog.Error("failed to ensure default rooms", "err", err)
@@ -64,7 +99,7 @@ func main() {
 	}
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao, persistSvc)
+	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao, persistSvc, pkSvc)
 
 	r := router.Setup(wsCtrl, roomCtrl)
 

@@ -14,10 +14,11 @@ type GiftService struct {
 	redisDao   *dao.RedisDao
 	hub        HubInterface
 	persistSvc *PersistService
+	pkSvc      *PKService
 }
 
-func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, persistSvc *PersistService) *GiftService {
-	return &GiftService{redisDao: redisDao, hub: hub, persistSvc: persistSvc}
+func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, persistSvc *PersistService, pkSvc *PKService) *GiftService {
+	return &GiftService{redisDao: redisDao, hub: hub, persistSvc: persistSvc, pkSvc: pkSvc}
 }
 
 func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -66,4 +67,20 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 			CreatedAt: time.Now(),
 		})
 	}
+
+	if s.pkSvc != nil {
+		pkState, err := s.pkSvc.AddScore(ctx, msg.RoomID, msg.UserID, score)
+		if err == nil && pkState != nil {
+			s.broadcastPKState(ctx, msg.RoomID)
+		}
+	}
+}
+
+func (s *GiftService) broadcastPKState(ctx context.Context, roomID string) {
+	state, err := s.pkSvc.GetPKState(ctx, roomID)
+	if err != nil || state == nil {
+		return
+	}
+	payload, _ := model.NewResponse("pk_state", roomID, "", state)
+	s.hub.Broadcast(roomID, "pk_state", payload)
 }

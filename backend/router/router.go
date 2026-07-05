@@ -20,6 +20,8 @@ func Setup(wsCtrl *controller.WSController, roomCtrl *controller.RoomController)
 		api.GET("/room/chats", roomCtrl.ListRecentChats)
 		api.GET("/room/gifts", roomCtrl.ListRecentGifts)
 		api.GET("/room/persist/state", roomCtrl.GetPersistState)
+		api.GET("/room/pk/state", roomCtrl.GetPKState)
+		api.GET("/room/pk/rank", roomCtrl.GetPKRank)
 		api.GET("/rooms", roomCtrl.ListRooms)
 		api.GET("/rooms/:room_id", roomCtrl.GetRoom)
 	}
@@ -27,6 +29,8 @@ func Setup(wsCtrl *controller.WSController, roomCtrl *controller.RoomController)
 	admin := r.Group("/api/admin")
 	{
 		admin.POST("/rooms/:room_id/close", roomCtrl.CloseRoom)
+		admin.POST("/room/pk/start", roomCtrl.StartPK)
+		admin.POST("/room/pk/end", roomCtrl.EndPK)
 	}
 
 	return r

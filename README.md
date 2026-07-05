@@ -1,15 +1,19 @@
-# LiveRoom Battle
+# LiveRoom Battle — 红蓝 PK 直播互动系统
 
-直播间实时互动系统 V3 —— 基于 Go + WebSocket + Redis + MySQL 实现预置房间大厅、动态进入房间、弹幕、礼物、排行榜、限流、在线人数统计、bot 压测和异步持久化。
+基于 Go + WebSocket + Redis + MySQL 实现预置房间大厅、动态进入房间、红蓝阵营选择、礼物加分、实时比分、弹幕、排行榜、限流、在线人数统计、bot 压测和异步持久化。
 
 当前能力：
 - 预置房间大厅、动态进入房间
-- WebSocket 弹幕、礼物广播
-- Redis 礼物排行榜、限流、在线人数
+- 红蓝阵营选择
+- WebSocket 弹幕（红蓝阵营颜色标记）
+- 礼物给阵营加分
+- 红蓝实时比分进度条
+- PK 倒计时和胜负判断
+- Redis 礼物榜 + 阵营贡献榜
+- Redis 限流 + 在线人数
 - bot 压测
-- MySQL 弹幕记录、礼物流水
-- PersistService 本机异步落库队列
-- /api/room/persist/state 查看落库状态
+- MySQL 异步持久化
+- /api/room/pk/state 查看 PK 状态
 
 当前不包含：RabbitMQ、微服务、登录注册、主播后台、用户创建房间、真实音视频直播。
 

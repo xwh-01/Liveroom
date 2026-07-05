@@ -202,3 +202,124 @@ func (d *RedisDao) CloseRoom(ctx context.Context, roomID string) error {
 	_, err := pipe.Exec(ctx)
 	return err
 }
+
+func (d *RedisDao) SetUserTeam(ctx context.Context, roomID, userID, team string) error {
+	return d.rdb.Set(ctx, utils.PKUserTeamKey(roomID, userID), team, 0).Err()
+}
+
+func (d *RedisDao) GetUserTeam(ctx context.Context, roomID, userID string) (string, error) {
+	val, err := d.rdb.Get(ctx, utils.PKUserTeamKey(roomID, userID)).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	return val, err
+}
+
+func (d *RedisDao) AddTeamUser(ctx context.Context, roomID, team string, userID string) error {
+	var key string
+	if team == "red" {
+		key = utils.PKRedUsersKey(roomID)
+	} else {
+		key = utils.PKBlueUsersKey(roomID)
+	}
+	return d.rdb.SAdd(ctx, key, userID).Err()
+}
+
+func (d *RedisDao) GetTeamUserCount(ctx context.Context, roomID, team string) (int64, error) {
+	var key string
+	if team == "red" {
+		key = utils.PKRedUsersKey(roomID)
+	} else {
+		key = utils.PKBlueUsersKey(roomID)
+	}
+	return d.rdb.SCard(ctx, key).Result()
+}
+
+func (d *RedisDao) AddPKScore(ctx context.Context, roomID, userID, team string, score int) error {
+	pipe := d.rdb.Pipeline()
+	var scoreKey string
+	if team == "red" {
+		scoreKey = utils.PKRedScoreKey(roomID)
+	} else {
+		scoreKey = utils.PKBlueScoreKey(roomID)
+	}
+	pipe.IncrBy(ctx, scoreKey, int64(score))
+	pipe.ZIncrBy(ctx, utils.PKTeamRankKey(roomID, team), float64(score), userID)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (d *RedisDao) GetPKScore(ctx context.Context, roomID string) (int64, int64, error) {
+	redScore, err := d.rdb.Get(ctx, utils.PKRedScoreKey(roomID)).Result()
+	if err == redis.Nil {
+		redScore = "0"
+	} else if err != nil {
+		return 0, 0, err
+	}
+	blueScore, err := d.rdb.Get(ctx, utils.PKBlueScoreKey(roomID)).Result()
+	if err == redis.Nil {
+		blueScore = "0"
+	} else if err != nil {
+		return 0, 0, err
+	}
+	r, _ := strconv.ParseInt(redScore, 10, 64)
+	b, _ := strconv.ParseInt(blueScore, 10, 64)
+	return r, b, nil
+}
+
+func (d *RedisDao) SetPKState(ctx context.Context, state model.PKState) error {
+	key := utils.PKStateKey(state.RoomID)
+	return d.rdb.HSet(ctx, key,
+		"room_id", state.RoomID,
+		"status", state.Status,
+		"red_score", state.RedScore,
+		"blue_score", state.BlueScore,
+		"red_users", state.RedUsers,
+		"blue_users", state.BlueUsers,
+		"winner", state.Winner,
+		"start_time", state.StartTime,
+		"end_time", state.EndTime,
+	).Err()
+}
+
+func (d *RedisDao) GetPKState(ctx context.Context, roomID string) (*model.PKState, error) {
+	key := utils.PKStateKey(roomID)
+	val, err := d.rdb.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(val) == 0 {
+		return nil, nil
+	}
+	redScore, _ := strconv.ParseInt(val["red_score"], 10, 64)
+	blueScore, _ := strconv.ParseInt(val["blue_score"], 10, 64)
+	redUsers, _ := strconv.ParseInt(val["red_users"], 10, 64)
+	blueUsers, _ := strconv.ParseInt(val["blue_users"], 10, 64)
+	return &model.PKState{
+		RoomID:    val["room_id"],
+		Status:    val["status"],
+		RedScore:  redScore,
+		BlueScore: blueScore,
+		RedUsers:  redUsers,
+		BlueUsers: blueUsers,
+		Winner:    val["winner"],
+		StartTime: val["start_time"],
+		EndTime:   val["end_time"],
+	}, nil
+}
+
+func (d *RedisDao) GetTeamRank(ctx context.Context, roomID, team string, topN int) ([]model.RankItem, error) {
+	key := utils.PKTeamRankKey(roomID, team)
+	results, err := d.rdb.ZRevRangeWithScores(ctx, key, 0, int64(topN-1)).Result()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]model.RankItem, 0, len(results))
+	for _, z := range results {
+		items = append(items, model.RankItem{
+			UserID: z.Member.(string),
+			Score:  int(z.Score),
+		})
+	}
+	return items, nil
+}
