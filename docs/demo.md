@@ -6,21 +6,7 @@
 mysql -uroot -p < backend/sql/001_init_records.sql
 ```
 
-这会创建 `liveroom` 数据库以及 `chat_records` 和 `gift_records` 两张表。
-
-## 2. 修改 MySQL 连接配置
-
-编辑 `backend/config/config.toml`，将 `[mysql]` 中的 `dsn` 修改为你的 MySQL 账号密码：
-
-```toml
-[mysql]
-dsn = "root:your_password@tcp(127.0.0.1:3306)/liveroom?charset=utf8mb4&parseTime=True&loc=Local"
-max_open_conns = 20
-max_idle_conns = 10
-conn_max_lifetime_seconds = 300
-```
-
-## 3. 启动服务
+## 2. 启动服务
 
 按顺序启动：
 
@@ -38,36 +24,66 @@ npm install
 npm run dev
 ```
 
-## 4. 验证弹幕持久化
+## 3. 完整用户演示流程
 
-### 方式一：通过前端页面
+### 3.1 打开房间大厅
 
-1. 浏览器打开 `http://localhost:3000`
-2. 输入房间号（如 `1001`）和用户名，点击进入
-3. 在弹幕输入框发送一条弹幕
-4. 用 curl 查询弹幕记录：
+浏览器打开 `http://localhost:3000`，自动跳转到 `/rooms` 房间大厅页面。
+
+默认房间 `1001` 已在后端启动时自动创建，显示在列表中。
+
+### 3.2 创建房间
+
+点击「创建房间」按钮，输入房间标题（如 "今晚一起聊天"），点击创建。创建成功后自动跳转到该房间。
+
+也可以通过 curl 创建：
 
 ```bash
-curl "http://localhost:8080/api/room/chats?room_id=1001&limit=20"
+curl -X POST "http://localhost:8080/api/rooms" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"测试直播间","owner_name":"demo"}'
 ```
 
-### 方式二：直接查询数据库
+### 3.3 进入房间
 
-```sql
-SELECT * FROM chat_records WHERE room_id = '1001' ORDER BY created_at DESC LIMIT 20;
-```
+在大厅点击房间卡片的「进入」按钮，或通过 URL 直接进入：
+`http://localhost:3000/room/1001`
 
-### 方式三：通过 Bot 批量验证
+进入后自动连接 WebSocket，可以看到直播画面、弹幕区、礼物面板、排行榜等。
+
+### 3.4 发送弹幕
+
+在底部输入框输入弹幕内容，按回车或点击发送。弹幕会出现在左侧弹幕区。
+
+### 3.5 送礼物
+
+点击底部礼物按钮（小心心 / 火箭）。赠送后排行榜更新，系统日志显示送礼信息。
+
+### 3.6 查看排行榜
+
+右侧排行榜面板实时显示当前房间 TOP10 用户积分。
+
+### 3.7 开两个窗口观察在线人数
+
+再打开一个浏览器窗口（或隐身窗口）进入同一个房间，观察右侧 RoomStats 面板的在线人数变为 2。
+
+### 3.8 启动 bot 压测
 
 ```bash
 cd backend/bot
-go run main.go -duration_seconds=10
+go run main.go -room_id=1001 -user_count=20 -duration_seconds=30
 ```
 
-Bot 运行结束后，查询弹幕记录：
+### 3.9 回到大厅观察统计
+
+访问 `http://localhost:3000/rooms`，观察房间卡片的 `chat_count`、`gift_count`、`online_count` 数据。
+
+## 4. 验证弹幕持久化
+
+Bot 运行结束后：
 
 ```bash
-curl "http://localhost:8080/api/room/chats?room_id=1001&limit=100"
+curl "http://localhost:8080/api/room/chats?room_id=1001&limit=20"
 ```
 
 ## 5. 验证礼物持久化
@@ -76,77 +92,30 @@ curl "http://localhost:8080/api/room/chats?room_id=1001&limit=100"
 curl "http://localhost:8080/api/room/gifts?room_id=1001&limit=20"
 ```
 
-直接查询数据库：
-
-```sql
-SELECT * FROM gift_records WHERE room_id = '1001' ORDER BY created_at DESC LIMIT 20;
-```
-
-## 6. 验证落库失败不影响广播
-
-即使 MySQL 不可用（关闭 MySQL 或连接断开），后端仍应正常运行：
-- 弹幕和礼物广播正常
-- Worker 打印 error 日志但不 panic
-- `/api/room/state` 返回正常数据
-
-## 7. 验证队列满丢弃
-
-可以通过调小 queueSize 来模拟（临时修改 main.go 中 `NewPersistService(recordDao, 10)`），然后用 bot 高压写入。
-
-观察日志中是否出现：
-
-```
-WARN persist queue full, event dropped type=chat room_id=1001 user_id=...
-```
-
-同时 `/api/room/state` 中的 `persist_dropped_count` 会增长：
+## 6. 验证房间 API
 
 ```bash
-curl "http://localhost:8080/api/room/state?room_id=1001"
+# 创建房间
+curl -X POST "http://localhost:8080/api/rooms" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"弹幕测试","owner_name":"test"}'
+
+# 查看房间列表
+curl "http://localhost:8080/api/rooms?limit=10"
+
+# 查看单个房间
+curl "http://localhost:8080/api/rooms/1001"
+
+# 关闭房间
+curl -X POST "http://localhost:8080/api/rooms/1001/close"
+
+# 关闭后尝试进入（应返回 room is closed）
 ```
 
-返回结果中包含：
-
-```json
-{
-  "code": 0,
-  "msg": "ok",
-  "data": {
-    "room_id": "1001",
-    "online_count": 5,
-    "limited_count": 0,
-    "chat_count": 1234,
-    "gift_count": 567,
-    "persist_dropped_count": 10
-  }
-}
-```
-
-## 8. 验证 API 限制
-
-limit 参数验证：
-- `limit` 不传默认 20
-- `limit` 传超过 100 会被截断为 100
-- `room_id` 不传返回 `{"code":400,"msg":"bad request"}`
+## 7. 验证全链路
 
 ```bash
-# 默认 20 条
-curl "http://localhost:8080/api/room/chats?room_id=1001"
-
-# 指定 50 条
-curl "http://localhost:8080/api/room/chats?room_id=1001&limit=50"
-
-# 超过 100 截断为 100
-curl "http://localhost:8080/api/room/chats?room_id=1001&limit=999"
-
-# 缺少 room_id
-curl "http://localhost:8080/api/room/chats"
-```
-
-## 9. 压测后验证全链路
-
-```bash
-# 运行 bot 压测 60 秒
+# 运行 bot 压测
 cd backend/bot
 go run main.go -user_count=50 -duration_seconds=60
 
@@ -159,6 +128,6 @@ curl "http://localhost:8080/api/room/chats?room_id=1001&limit=100"
 # 查询礼物流水
 curl "http://localhost:8080/api/room/gifts?room_id=1001&limit=100"
 
-# 检查 persist_dropped_count
-curl -s "http://localhost:8080/api/room/state?room_id=1001" | grep persist_dropped_count
+# 查看房间详情（含 counts）
+curl "http://localhost:8080/api/rooms/1001"
 ```

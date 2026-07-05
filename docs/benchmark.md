@@ -31,12 +31,32 @@ npm run dev
 
 ### 4. 启动 bot 压测
 
+压测前需要确保目标房间存在。
+
+**方式一：使用默认房间 1001**
+
+后端启动时会自动创建默认房间 `1001`，可直接使用：
+
 ```bash
 cd backend/bot
 go run main.go
 ```
 
 默认参数：20 用户连接 `room 1001`，运行 60 秒。
+
+**方式二：手动创建房间**
+
+```bash
+curl -X POST "http://localhost:8080/api/rooms" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"压测直播间","owner_name":"bot"}'
+```
+
+然后使用返回的 room_id：
+
+```bash
+go run main.go -host=localhost:8080 -room_id=<返回的room_id> ...
+```
 
 #### Bot 参数
 

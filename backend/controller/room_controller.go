@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"liveroom-battle/dao"
+	"liveroom-battle/model"
 	"liveroom-battle/service"
 	"liveroom-battle/utils"
 
@@ -12,16 +13,18 @@ import (
 )
 
 type RoomController struct {
-	roomSvc   *service.RoomService
-	rankSvc   *service.RankService
-	recordDao *dao.RecordDao
+	roomSvc        *service.RoomService
+	roomManageSvc  *service.RoomManageService
+	rankSvc        *service.RankService
+	recordDao      *dao.RecordDao
 }
 
-func NewRoomController(roomSvc *service.RoomService, rankSvc *service.RankService, recordDao *dao.RecordDao) *RoomController {
+func NewRoomController(roomSvc *service.RoomService, roomManageSvc *service.RoomManageService, rankSvc *service.RankService, recordDao *dao.RecordDao) *RoomController {
 	return &RoomController{
-		roomSvc:   roomSvc,
-		rankSvc:   rankSvc,
-		recordDao: recordDao,
+		roomSvc:       roomSvc,
+		roomManageSvc: roomManageSvc,
+		rankSvc:       rankSvc,
+		recordDao:     recordDao,
 	}
 }
 
@@ -99,4 +102,82 @@ func (c *RoomController) ListRecentGifts(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, utils.Success(records))
+}
+
+type CreateRoomReq struct {
+	Title     string `json:"title"`
+	OwnerName string `json:"owner_name"`
+}
+
+func (c *RoomController) CreateRoom(ctx *gin.Context) {
+	var req CreateRoomReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	if req.Title == "" {
+		ctx.JSON(http.StatusBadRequest, utils.Response{Code: 400, Msg: "title is required"})
+		return
+	}
+	meta, err := c.roomManageSvc.CreateRoom(ctx.Request.Context(), req.Title, req.OwnerName)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(meta))
+}
+
+func (c *RoomController) ListRooms(ctx *gin.Context) {
+	limit := 20
+	if l := ctx.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	rooms, err := c.roomManageSvc.ListLiveRooms(ctx.Request.Context(), limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	if rooms == nil {
+		rooms = []model.RoomMeta{}
+	}
+	ctx.JSON(http.StatusOK, utils.Success(rooms))
+}
+
+func (c *RoomController) GetRoom(ctx *gin.Context) {
+	roomID := ctx.Param("room_id")
+	if roomID == "" {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	meta, err := c.roomManageSvc.GetRoom(ctx.Request.Context(), roomID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	if meta == nil {
+		ctx.JSON(http.StatusNotFound, utils.Response{Code: 404, Msg: "room not found"})
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(meta))
+}
+
+func (c *RoomController) CloseRoom(ctx *gin.Context) {
+	roomID := ctx.Param("room_id")
+	if roomID == "" {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	if err := c.roomManageSvc.CloseRoom(ctx.Request.Context(), roomID); err != nil {
+		ctx.JSON(http.StatusBadRequest, utils.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(nil))
 }

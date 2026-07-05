@@ -40,6 +40,7 @@ func main() {
 	persistSvc.Start(ctx, 2)
 
 	roomSvc := service.NewRoomService(redisDao, roomHub, persistSvc)
+	roomManageSvc := service.NewRoomManageService(redisDao, roomHub)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
 	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
@@ -53,8 +54,10 @@ func main() {
 		giftSvc.HandleGift(ctx, client, msg)
 	})
 
-	wsCtrl := controller.NewWSController(dispatcher, roomSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, rankSvc, recordDao)
+	roomManageSvc.EnsureDefaultRoom(context.Background())
+
+	wsCtrl := controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
+	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao)
 
 	r := router.Setup(wsCtrl, roomCtrl)
 

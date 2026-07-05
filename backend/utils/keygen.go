@@ -9,6 +9,8 @@ const (
 	LimitedCountPrefix  = "room:limited"
 	ChatCountPrefix     = "room:chat_count"
 	GiftCountPrefix     = "room:gift_count"
+	RoomMetaPrefix      = "room:meta"
+	LiveRoomsKey        = "room:live"
 )
 
 func GiftRankKey(roomID string) string {
@@ -33,4 +35,12 @@ func ChatCountKey(roomID string) string {
 
 func GiftCountKey(roomID string) string {
 	return fmt.Sprintf("%s:%s", GiftCountPrefix, roomID)
+}
+
+func RoomMetaKey(roomID string) string {
+	return fmt.Sprintf("%s:%s", RoomMetaPrefix, roomID)
+}
+
+func LiveRoomsSetKey() string {
+	return LiveRoomsKey
 }

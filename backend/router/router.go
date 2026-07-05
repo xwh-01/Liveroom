@@ -19,6 +19,11 @@ func Setup(wsCtrl *controller.WSController, roomCtrl *controller.RoomController)
 		api.GET("/room/rank", roomCtrl.GetRank)
 		api.GET("/room/chats", roomCtrl.ListRecentChats)
 		api.GET("/room/gifts", roomCtrl.ListRecentGifts)
+
+		api.POST("/rooms", roomCtrl.CreateRoom)
+		api.GET("/rooms", roomCtrl.ListRooms)
+		api.GET("/rooms/:room_id", roomCtrl.GetRoom)
+		api.POST("/rooms/:room_id/close", roomCtrl.CloseRoom)
 	}
 
 	return r

@@ -16,14 +16,16 @@ import (
 )
 
 type WSController struct {
-	dispatcher *service.MessageDispatcher
-	roomSvc    *service.RoomService
+	dispatcher    *service.MessageDispatcher
+	roomSvc       *service.RoomService
+	roomManageSvc *service.RoomManageService
 }
 
-func NewWSController(dispatcher *service.MessageDispatcher, roomSvc *service.RoomService) *WSController {
+func NewWSController(dispatcher *service.MessageDispatcher, roomSvc *service.RoomService, roomManageSvc *service.RoomManageService) *WSController {
 	return &WSController{
-		dispatcher: dispatcher,
-		roomSvc:    roomSvc,
+		dispatcher:    dispatcher,
+		roomSvc:       roomSvc,
+		roomManageSvc: roomManageSvc,
 	}
 }
 
@@ -32,6 +34,16 @@ func (c *WSController) HandleWS(ctx *gin.Context) {
 	userID := ctx.Query("user_id")
 	if roomID == "" || userID == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "room_id and user_id required"})
+		return
+	}
+
+	meta, err := c.roomManageSvc.GetRoom(ctx.Request.Context(), roomID)
+	if err != nil || meta == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+		return
+	}
+	if meta.Status == "closed" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "room is closed"})
 		return
 	}
 

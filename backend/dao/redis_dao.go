@@ -129,3 +129,68 @@ func (d *RedisDao) GetGiftCount(ctx context.Context, roomID string) (int64, erro
 	}
 	return strconv.ParseInt(val, 10, 64)
 }
+
+func (d *RedisDao) CreateRoom(ctx context.Context, meta model.RoomMeta) error {
+	key := utils.RoomMetaKey(meta.RoomID)
+	pipe := d.rdb.Pipeline()
+	pipe.HSet(ctx, key,
+		"room_id", meta.RoomID,
+		"title", meta.Title,
+		"owner_name", meta.OwnerName,
+		"status", meta.Status,
+		"created_at", meta.CreatedAt,
+	)
+	timestamp, err := strconv.ParseInt(meta.CreatedAt, 10, 64)
+	if err == nil {
+		pipe.ZAdd(ctx, utils.LiveRoomsSetKey(), redis.Z{
+			Score:  float64(timestamp),
+			Member: meta.RoomID,
+		})
+	}
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+func (d *RedisDao) GetRoomMeta(ctx context.Context, roomID string) (*model.RoomMeta, error) {
+	key := utils.RoomMetaKey(roomID)
+	val, err := d.rdb.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(val) == 0 {
+		return nil, nil
+	}
+	meta := &model.RoomMeta{
+		RoomID:    val["room_id"],
+		Title:     val["title"],
+		OwnerName: val["owner_name"],
+		Status:    val["status"],
+		CreatedAt: val["created_at"],
+	}
+	return meta, nil
+}
+
+func (d *RedisDao) ListLiveRooms(ctx context.Context, limit int) ([]model.RoomMeta, error) {
+	roomIDs, err := d.rdb.ZRevRange(ctx, utils.LiveRoomsSetKey(), 0, int64(limit-1)).Result()
+	if err != nil {
+		return nil, err
+	}
+	rooms := make([]model.RoomMeta, 0, len(roomIDs))
+	for _, id := range roomIDs {
+		meta, err := d.GetRoomMeta(ctx, id)
+		if err != nil || meta == nil {
+			continue
+		}
+		rooms = append(rooms, *meta)
+	}
+	return rooms, nil
+}
+
+func (d *RedisDao) CloseRoom(ctx context.Context, roomID string) error {
+	key := utils.RoomMetaKey(roomID)
+	pipe := d.rdb.Pipeline()
+	pipe.HSet(ctx, key, "status", "closed")
+	pipe.ZRem(ctx, utils.LiveRoomsSetKey(), roomID)
+	_, err := pipe.Exec(ctx)
+	return err
+}
