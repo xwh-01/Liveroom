@@ -82,9 +82,10 @@ func main() {
 	}
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, pkSvc)
+	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc)
+	pkCtrl := controller.NewPKController(pkSvc)
 
-	r := router.Setup(wsCtrl, roomCtrl)
+	r := router.Setup(wsCtrl, roomCtrl, pkCtrl)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
