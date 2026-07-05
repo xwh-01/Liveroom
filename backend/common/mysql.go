@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -13,11 +12,10 @@ import (
 	"liveroom-battle/config"
 )
 
-func InitMySQL(cfg config.MySQLConfig) *sql.DB {
+func InitMySQL(cfg config.MySQLConfig) (*sql.DB, error) {
 	db, err := sql.Open("mysql", cfg.DSN)
 	if err != nil {
-		slog.Error("failed to open mysql", "err", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to open mysql: %w", err)
 	}
 
 	db.SetMaxOpenConns(cfg.MaxOpenConns)
@@ -28,10 +26,9 @@ func InitMySQL(cfg config.MySQLConfig) *sql.DB {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		slog.Error("failed to connect to mysql", "err", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to ping mysql: %w", err)
 	}
 
 	slog.Info(fmt.Sprintf("mysql connected: %s", cfg.DSN))
-	return db
+	return db, nil
 }

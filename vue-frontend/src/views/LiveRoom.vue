@@ -3,6 +3,7 @@
     <header class="live-room-header">
       <span class="header-back" @click="$router.push('/rooms')">◂ 大厅</span>
       <span class="header-title">{{ roomTitle }}</span>
+      <span class="header-anchor">{{ roomAnchor }}</span>
     </header>
 
     <div v-if="roomError" class="room-error">
@@ -79,6 +80,7 @@ const props = defineProps({
 const ws = new LiveWSClient()
 
 const roomTitle = ref('加载中...')
+const roomAnchor = ref('')
 const roomError = ref('')
 const userId = ref(getOrCreateUserId())
 const connected = ref(false)
@@ -148,6 +150,7 @@ async function fetchRoomInfo() {
       return
     }
     roomTitle.value = data.data.title || '直播间'
+    roomAnchor.value = data.data.anchor_name ? `主播: ${data.data.anchor_name}` : ''
   } catch (e) {
     roomError.value = '无法获取房间信息'
   }
@@ -201,7 +204,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.live-room-header {
+  position: relative;
+  justify-content: center;
+}
 .header-back {
+  position: absolute;
+  left: 24px;
   cursor: pointer;
   font-size: 14px;
   opacity: 0.8;
@@ -211,10 +220,13 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 .header-title {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   font-size: 16px;
+}
+.header-anchor {
+  position: absolute;
+  right: 24px;
+  font-size: 13px;
+  opacity: 0.8;
 }
 
 .room-error {

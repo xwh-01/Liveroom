@@ -1,133 +1,95 @@
 # 功能演示验证指南
 
-## 1. 初始化 MySQL
+## 1. 启动 Redis
 
 ```bash
-mysql -uroot -p < backend/sql/001_init_records.sql
+redis-server
 ```
 
-## 2. 启动服务
-
-按顺序启动：
+## 2. 启动后端
 
 ```bash
-# 终端1: 启动 Redis
-redis-server
-
-# 终端2: 启动后端
 cd backend
 go run main.go
+```
 
-# 终端3: 启动前端
+后端启动时自动初始化 3 个预置直播间（1001 / 1002 / 1003）。
+
+## 3. 启动前端
+
+```bash
 cd vue-frontend
 npm install
 npm run dev
 ```
 
-## 3. 完整用户演示流程
+## 4. 完整演示流程
 
-### 3.1 打开房间大厅
+### 4.1 打开房间大厅
 
 浏览器打开 `http://localhost:3000`，自动跳转到 `/rooms` 房间大厅页面。
 
-默认房间 `1001` 已在后端启动时自动创建，显示在列表中。
+可以看到 3 个预置直播间卡片，分别展示：
+- 房间标题、主播名
+- 在线人数、弹幕数、礼物数
+- 直播状态
 
-### 3.2 创建房间
+### 4.2 进入直播间
 
-点击「创建房间」按钮，输入房间标题（如 "今晚一起聊天"），点击创建。创建成功后自动跳转到该房间。
+点击任意房间的「进入直播间」按钮，跳转到 `/room/:roomId`。
 
-也可以通过 curl 创建：
+进入后：
+- 自动连接 WebSocket
+- 顶部显示房间标题和主播名
+- 左侧显示直播画面和弹幕区
+- 右侧显示在线人数、排行榜、系统日志
 
-```bash
-curl -X POST "http://localhost:8080/api/rooms" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"测试直播间","owner_name":"demo"}'
-```
+### 4.3 发送弹幕
 
-### 3.3 进入房间
+在底部输入框输入弹幕内容，按回车或点击发送。弹幕出现在左侧弹幕区。
 
-在大厅点击房间卡片的「进入」按钮，或通过 URL 直接进入：
-`http://localhost:3000/room/1001`
+### 4.4 送礼物
 
-进入后自动连接 WebSocket，可以看到直播画面、弹幕区、礼物面板、排行榜等。
+点击底部礼物按钮（小心心 / 火箭）。排行榜实时更新，系统日志显示送礼信息。
 
-### 3.4 发送弹幕
+### 4.5 查看排行榜
 
-在底部输入框输入弹幕内容，按回车或点击发送。弹幕会出现在左侧弹幕区。
+右侧 RankBoard 展示当前房间 TOP10 用户积分。
 
-### 3.5 送礼物
+### 4.6 开两个窗口观察在线人数
 
-点击底部礼物按钮（小心心 / 火箭）。赠送后排行榜更新，系统日志显示送礼信息。
+再打开一个浏览器窗口进入同一房间，观察：
+- 右侧 RoomStats 在线人数变为 2
+- 回到大厅看到 online_count 更新
 
-### 3.6 查看排行榜
-
-右侧排行榜面板实时显示当前房间 TOP10 用户积分。
-
-### 3.7 开两个窗口观察在线人数
-
-再打开一个浏览器窗口（或隐身窗口）进入同一个房间，观察右侧 RoomStats 面板的在线人数变为 2。
-
-### 3.8 启动 bot 压测
+### 4.7 启动 bot 压测
 
 ```bash
 cd backend/bot
 go run main.go -room_id=1001 -user_count=20 -duration_seconds=30
 ```
 
-### 3.9 回到大厅观察统计
+### 4.8 回到大厅观察统计
 
-访问 `http://localhost:3000/rooms`，观察房间卡片的 `chat_count`、`gift_count`、`online_count` 数据。
+访问 `http://localhost:3000/rooms`，观察房间卡片的 chat_count、gift_count、online_count 数据变化。
 
-## 4. 验证弹幕持久化
-
-Bot 运行结束后：
+## 5. API 验证
 
 ```bash
-curl "http://localhost:8080/api/room/chats?room_id=1001&limit=20"
-```
-
-## 5. 验证礼物持久化
-
-```bash
-curl "http://localhost:8080/api/room/gifts?room_id=1001&limit=20"
-```
-
-## 6. 验证房间 API
-
-```bash
-# 创建房间
-curl -X POST "http://localhost:8080/api/rooms" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"弹幕测试","owner_name":"test"}'
-
 # 查看房间列表
 curl "http://localhost:8080/api/rooms?limit=10"
 
 # 查看单个房间
 curl "http://localhost:8080/api/rooms/1001"
 
-# 关闭房间
-curl -X POST "http://localhost:8080/api/rooms/1001/close"
-
-# 关闭后尝试进入（应返回 room is closed）
-```
-
-## 7. 验证全链路
-
-```bash
-# 运行 bot 压测
-cd backend/bot
-go run main.go -user_count=50 -duration_seconds=60
-
-# 查询房间状态
+# 查看房间状态
 curl "http://localhost:8080/api/room/state?room_id=1001"
 
-# 查询弹幕流水
-curl "http://localhost:8080/api/room/chats?room_id=1001&limit=100"
+# 查看排行榜
+curl "http://localhost:8080/api/room/rank?room_id=1001"
 
-# 查询礼物流水
-curl "http://localhost:8080/api/room/gifts?room_id=1001&limit=100"
+# 关闭房间（开发环境）
+curl -X POST "http://localhost:8080/api/admin/rooms/1001/close"
 
-# 查看房间详情（含 counts）
-curl "http://localhost:8080/api/rooms/1001"
+# 关闭后尝试 WebSocket 连接（应返回 room is closed）
 ```

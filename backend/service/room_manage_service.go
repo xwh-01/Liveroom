@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
-	"math/rand"
 	"strconv"
 	"time"
 
@@ -22,38 +20,40 @@ func NewRoomManageService(redisDao *dao.RedisDao, hub *hub.RoomHub) *RoomManageS
 	return &RoomManageService{redisDao: redisDao, hub: hub}
 }
 
-func (s *RoomManageService) CreateRoom(ctx context.Context, title, ownerName string) (*model.RoomMeta, error) {
-	if title == "" {
-		return nil, errors.New("title is required")
+var defaultRooms = []model.RoomMeta{
+	{
+		RoomID:     "1001",
+		Title:      "游戏开黑直播间",
+		AnchorName: "小黑",
+		Status:     "live",
+	},
+	{
+		RoomID:     "1002",
+		Title:      "音乐闲聊直播间",
+		AnchorName: "Echo",
+		Status:     "live",
+	},
+	{
+		RoomID:     "1003",
+		Title:      "学习摸鱼直播间",
+		AnchorName: "阿码",
+		Status:     "live",
+	},
+}
+
+func (s *RoomManageService) EnsureDefaultRooms(ctx context.Context) error {
+	now := time.Now().Unix()
+	baseTS := strconv.FormatInt(now, 10)
+
+	for i := range defaultRooms {
+		defaultRooms[i].Cover = ""
+		ts, _ := strconv.ParseInt(baseTS, 10, 64)
+		defaultRooms[i].CreatedAt = strconv.FormatInt(ts+int64(i), 10)
+		if err := s.redisDao.UpsertRoomMeta(ctx, defaultRooms[i]); err != nil {
+			return err
+		}
 	}
-	if ownerName == "" {
-		ownerName = "anonymous"
-	}
-
-	roomID := generateRoomID()
-	now := time.Now()
-	createdAt := strconv.FormatInt(now.Unix(), 10)
-
-	meta := model.RoomMeta{
-		RoomID:    roomID,
-		Title:     title,
-		OwnerName: ownerName,
-		Status:    "live",
-		CreatedAt: createdAt,
-	}
-
-	if err := s.redisDao.CreateRoom(ctx, meta); err != nil {
-		return nil, err
-	}
-
-	meta.OnlineCount = s.hub.OnlineCount(roomID)
-
-	chatCount, _ := s.redisDao.GetChatCount(ctx, roomID)
-	meta.ChatCount = chatCount
-	giftCount, _ := s.redisDao.GetGiftCount(ctx, roomID)
-	meta.GiftCount = giftCount
-
-	return &meta, nil
+	return nil
 }
 
 func (s *RoomManageService) ListLiveRooms(ctx context.Context, limit int) ([]model.RoomMeta, error) {
@@ -99,26 +99,4 @@ func (s *RoomManageService) CloseRoom(ctx context.Context, roomID string) error 
 		return errors.New("room already closed")
 	}
 	return s.redisDao.CloseRoom(ctx, roomID)
-}
-
-func (s *RoomManageService) EnsureDefaultRoom(ctx context.Context) {
-	meta, err := s.redisDao.GetRoomMeta(ctx, "1001")
-	if err != nil || meta == nil {
-		defaultMeta := model.RoomMeta{
-			RoomID:    "1001",
-			Title:     "默认直播间",
-			OwnerName: "system",
-			Status:    "live",
-			CreatedAt: strconv.FormatInt(time.Now().Unix(), 10),
-		}
-		if err := s.redisDao.CreateRoom(ctx, defaultMeta); err != nil {
-			return
-		}
-	}
-}
-
-func generateRoomID() string {
-	now := time.Now().UnixMilli()
-	r := rand.Intn(10000)
-	return fmt.Sprintf("%d%04d", now, r)
 }

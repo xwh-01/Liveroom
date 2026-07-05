@@ -130,13 +130,21 @@ func (d *RedisDao) GetGiftCount(ctx context.Context, roomID string) (int64, erro
 	return strconv.ParseInt(val, 10, 64)
 }
 
-func (d *RedisDao) CreateRoom(ctx context.Context, meta model.RoomMeta) error {
+func (d *RedisDao) UpsertRoomMeta(ctx context.Context, meta model.RoomMeta) error {
 	key := utils.RoomMetaKey(meta.RoomID)
+	exists, err := d.rdb.Exists(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+	if exists > 0 {
+		return nil
+	}
 	pipe := d.rdb.Pipeline()
 	pipe.HSet(ctx, key,
 		"room_id", meta.RoomID,
 		"title", meta.Title,
-		"owner_name", meta.OwnerName,
+		"anchor_name", meta.AnchorName,
+		"cover", meta.Cover,
 		"status", meta.Status,
 		"created_at", meta.CreatedAt,
 	)
@@ -160,14 +168,14 @@ func (d *RedisDao) GetRoomMeta(ctx context.Context, roomID string) (*model.RoomM
 	if len(val) == 0 {
 		return nil, nil
 	}
-	meta := &model.RoomMeta{
-		RoomID:    val["room_id"],
-		Title:     val["title"],
-		OwnerName: val["owner_name"],
-		Status:    val["status"],
-		CreatedAt: val["created_at"],
-	}
-	return meta, nil
+	return &model.RoomMeta{
+		RoomID:     val["room_id"],
+		Title:      val["title"],
+		AnchorName: val["anchor_name"],
+		Cover:      val["cover"],
+		Status:     val["status"],
+		CreatedAt:  val["created_at"],
+	}, nil
 }
 
 func (d *RedisDao) ListLiveRooms(ctx context.Context, limit int) ([]model.RoomMeta, error) {

@@ -13,10 +13,10 @@ import (
 )
 
 type RoomController struct {
-	roomSvc        *service.RoomService
-	roomManageSvc  *service.RoomManageService
-	rankSvc        *service.RankService
-	recordDao      *dao.RecordDao
+	roomSvc       *service.RoomService
+	roomManageSvc *service.RoomManageService
+	rankSvc       *service.RankService
+	recordDao     *dao.RecordDao
 }
 
 func NewRoomController(roomSvc *service.RoomService, roomManageSvc *service.RoomManageService, rankSvc *service.RankService, recordDao *dao.RecordDao) *RoomController {
@@ -102,29 +102,6 @@ func (c *RoomController) ListRecentGifts(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, utils.Success(records))
-}
-
-type CreateRoomReq struct {
-	Title     string `json:"title"`
-	OwnerName string `json:"owner_name"`
-}
-
-func (c *RoomController) CreateRoom(ctx *gin.Context) {
-	var req CreateRoomReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
-		return
-	}
-	if req.Title == "" {
-		ctx.JSON(http.StatusBadRequest, utils.Response{Code: 400, Msg: "title is required"})
-		return
-	}
-	meta, err := c.roomManageSvc.CreateRoom(ctx.Request.Context(), req.Title, req.OwnerName)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
-		return
-	}
-	ctx.JSON(http.StatusOK, utils.Success(meta))
 }
 
 func (c *RoomController) ListRooms(ctx *gin.Context) {

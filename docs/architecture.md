@@ -14,6 +14,8 @@
 │                  Gin Router                       │
 │  /ws  /api/room/state  /api/room/rank            │
 │  /api/room/chats  /api/room/gifts                │
+│  /api/rooms  /api/rooms/:room_id                 │
+│  /api/admin/rooms/:room_id/close                 │
 └──────────┬───────────────┬──────────────────────┘
            │               │
            ▼               ▼
@@ -81,6 +83,38 @@
 
 ## 数据流
 
+### 房间大厅流程
+
+```
+Browser -> GET /api/rooms
+  -> RoomController.ListRooms
+    -> RoomManageService.ListLiveRooms
+      -> RedisDao.ListLiveRooms (ZREVRANGE room:live)
+      -> 对每个 room_id:
+        -> RedisDao.GetRoomMeta (HGETALL room:meta:{id})
+        -> Hub.OnlineCount (内存)
+        -> RedisDao.GetChatCount / GetGiftCount
+      -> 返回排序后的房间列表
+  -> 前端 RoomLobby 展示卡片
+```
+
+### 进入房间流程
+
+```
+Browser -> GET /api/rooms/:room_id
+  -> RoomController.GetRoom
+    -> RoomManageService.GetRoom
+      -> RedisDao.GetRoomMeta (HGETALL room:meta:{id})
+        -> 不存在 -> 404
+        -> status=closed -> 前端提示"房间已关闭"
+        -> status=live -> 返回房间详情
+  -> 前端 LiveRoom 获取信息后:
+    -> WebSocket connect /ws?room_id=xxx&user_id=xxx
+      -> WSController 检查 room_meta (存在 + status=live)
+      -> RoomService.Join -> RoomHub + Redis online set
+      -> 广播 online 消息
+```
+
 ### 弹幕消息流
 
 ```
@@ -133,10 +167,12 @@ main.go (wire)
  ├── service.NewPersistService(recordDao, 10000)
  │    └── persistSvc.Start(ctx, 2)
  ├── service.NewRoomService(redisDao, roomHub, persistSvc)
+ ├── service.NewRoomManageService(redisDao, roomHub)
+ │    └── roomManageSvc.EnsureDefaultRooms(ctx)
  ├── service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
  ├── service.NewGiftService(redisDao, roomHub, persistSvc)
- ├── controller.NewWSController(dispatcher, roomSvc)
- └── controller.NewRoomController(roomSvc, rankSvc, recordDao)
+ ├── controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
+ └── controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao)
 ```
 
 ## MySQL 表结构

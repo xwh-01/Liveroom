@@ -2,12 +2,11 @@
   <div class="room-lobby">
     <header class="lobby-header">
       <h1>LiveRoom Battle</h1>
-      <el-button type="primary" @click="showCreateDialog = true">创建房间</el-button>
     </header>
 
     <div class="lobby-body">
       <div v-if="loading" class="lobby-loading">加载中...</div>
-      <div v-else-if="rooms.length === 0" class="lobby-empty">暂无直播间，快来创建一个吧！</div>
+      <div v-else-if="rooms.length === 0" class="lobby-empty">暂无直播间</div>
       <div v-else class="room-grid">
         <div v-for="room in rooms" :key="room.room_id" class="room-card">
           <div class="room-card-header">
@@ -18,8 +17,8 @@
           </div>
           <div class="room-card-body">
             <div class="room-info">
-              <span class="info-label">房主</span>
-              <span>{{ room.owner_name }}</span>
+              <span class="info-label">主播</span>
+              <span>{{ room.anchor_name }}</span>
             </div>
             <div class="room-stats">
               <div class="stat-item">
@@ -38,26 +37,11 @@
           </div>
           <div class="room-card-footer">
             <span class="room-id">ID: {{ room.room_id }}</span>
-            <el-button type="primary" size="small" @click="enterRoom(room.room_id)">进入</el-button>
+            <el-button type="primary" size="small" @click="enterRoom(room.room_id)">进入直播间</el-button>
           </div>
         </div>
       </div>
     </div>
-
-    <el-dialog v-model="showCreateDialog" title="创建直播间" width="400px">
-      <el-form :model="createForm" label-width="80px">
-        <el-form-item label="房间标题" required>
-          <el-input v-model="createForm.title" placeholder="输入房间标题" />
-        </el-form-item>
-        <el-form-item label="房主昵称">
-          <el-input v-model="createForm.owner_name" placeholder="anonymous" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="doCreateRoom" :loading="creating">创建</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -70,9 +54,6 @@ const router = useRouter()
 
 const rooms = ref([])
 const loading = ref(true)
-const showCreateDialog = ref(false)
-const creating = ref(false)
-const createForm = ref({ title: '', owner_name: '' })
 
 async function fetchRooms() {
   try {
@@ -85,37 +66,6 @@ async function fetchRooms() {
     ElMessage.error('加载房间列表失败')
   } finally {
     loading.value = false
-  }
-}
-
-async function doCreateRoom() {
-  if (!createForm.value.title.trim()) {
-    ElMessage.warning('请输入房间标题')
-    return
-  }
-  creating.value = true
-  try {
-    const res = await fetch('/api/rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: createForm.value.title,
-        owner_name: createForm.value.owner_name || 'anonymous'
-      })
-    })
-    const data = await res.json()
-    if (data.code === 0) {
-      ElMessage.success('房间创建成功')
-      showCreateDialog.value = false
-      createForm.value = { title: '', owner_name: '' }
-      router.push(`/room/${data.data.room_id}`)
-    } else {
-      ElMessage.error(data.msg || '创建失败')
-    }
-  } catch (e) {
-    ElMessage.error('创建房间失败')
-  } finally {
-    creating.value = false
   }
 }
 
@@ -138,7 +88,6 @@ onMounted(fetchRooms)
   color: #fff;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 24px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }

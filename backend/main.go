@@ -29,7 +29,11 @@ func main() {
 	rdb := common.InitRedis(config.Cfg.Redis)
 	redisDao := dao.NewRedisDao(rdb)
 
-	db := common.InitMySQL(config.Cfg.MySQL)
+	db, err := common.InitMySQL(config.Cfg.MySQL)
+	if err != nil {
+		slog.Error("failed to init mysql", "err", err)
+		os.Exit(1)
+	}
 	recordDao := dao.NewRecordDao(db)
 
 	roomHub := hub.NewRoomHub()
@@ -54,7 +58,10 @@ func main() {
 		giftSvc.HandleGift(ctx, client, msg)
 	})
 
-	roomManageSvc.EnsureDefaultRoom(context.Background())
+	if err := roomManageSvc.EnsureDefaultRooms(context.Background()); err != nil {
+		slog.Error("failed to ensure default rooms", "err", err)
+		os.Exit(1)
+	}
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc, roomManageSvc)
 	roomCtrl := controller.NewRoomController(roomSvc, roomManageSvc, rankSvc, recordDao)

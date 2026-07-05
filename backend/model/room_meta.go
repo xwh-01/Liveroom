@@ -3,7 +3,8 @@ package model
 type RoomMeta struct {
 	RoomID      string `json:"room_id"`
 	Title       string `json:"title"`
-	OwnerName   string `json:"owner_name"`
+	AnchorName  string `json:"anchor_name"`
+	Cover       string `json:"cover"`
 	Status      string `json:"status"`
 	CreatedAt   string `json:"created_at"`
 	OnlineCount int    `json:"online_count"`
