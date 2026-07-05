@@ -1,8 +1,15 @@
 # LiveRoom Battle
 
-直播间实时互动系统 V3 —— 基于 WebSocket + Redis + MySQL 实现预置房间大厅、进入指定房间、弹幕、礼物、排行榜、限流、在线人数统计和 bot 压测。
+直播间实时互动系统 V3 —— 基于 Go + WebSocket + Redis + MySQL 实现预置房间大厅、动态进入房间、弹幕、礼物、排行榜、限流、在线人数统计、bot 压测和异步持久化。
 
-V3 新增：MySQL 异步持久化弹幕记录和礼物流水。
+当前能力：
+- 预置房间大厅、动态进入房间
+- WebSocket 弹幕、礼物广播
+- Redis 礼物排行榜、限流、在线人数
+- bot 压测
+- MySQL 弹幕记录、礼物流水
+- PersistService 本机异步落库队列
+- /api/room/persist/state 查看落库状态
 
 当前不包含：RabbitMQ、微服务、登录注册、主播后台、用户创建房间、真实音视频直播。
 
