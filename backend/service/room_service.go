@@ -10,12 +10,13 @@ import (
 )
 
 type RoomService struct {
-	redisDao *dao.RedisDao
-	hub      *hub.RoomHub
+	redisDao   *dao.RedisDao
+	hub        *hub.RoomHub
+	persistSvc *PersistService
 }
 
-func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub) *RoomService {
-	return &RoomService{redisDao: redisDao, hub: hub}
+func NewRoomService(redisDao *dao.RedisDao, hub *hub.RoomHub, persistSvc *PersistService) *RoomService {
+	return &RoomService{redisDao: redisDao, hub: hub, persistSvc: persistSvc}
 }
 
 func (s *RoomService) Join(ctx context.Context, client *model.Client) {
@@ -41,7 +42,7 @@ func (s *RoomService) broadcastOnline(ctx context.Context, roomID string) {
 		slog.Error("marshal online message failed", "err", err)
 		return
 	}
-	s.hub.Broadcast(roomID, msg)
+	s.hub.Broadcast(roomID, "online", msg)
 }
 
 func (s *RoomService) GetRoomState(ctx context.Context, roomID string) *model.RoomState {
@@ -63,10 +64,18 @@ func (s *RoomService) GetRoomState(ctx context.Context, roomID string) *model.Ro
 	}
 
 	return &model.RoomState{
-		RoomID:       roomID,
-		OnlineCount:  onlineCount,
-		LimitedCount: limitedCount,
-		ChatCount:    chatCount,
-		GiftCount:    giftCount,
+		RoomID:              roomID,
+		OnlineCount:         onlineCount,
+		LimitedCount:        limitedCount,
+		ChatCount:           chatCount,
+		GiftCount:           giftCount,
+		PersistDroppedCount: s.persistDroppedCount(),
 	}
+}
+
+func (s *RoomService) persistDroppedCount() int64 {
+	if s.persistSvc == nil {
+		return 0
+	}
+	return s.persistSvc.DroppedCount()
 }

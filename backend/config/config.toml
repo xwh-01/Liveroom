@@ -6,5 +6,11 @@ addr = "localhost:6379"
 password = ""
 db = 0
 
+[mysql]
+dsn = "root:532948@tcp(127.0.0.1:3306)/liveroom?charset=utf8mb4&parseTime=True&loc=Local"
+max_open_conns = 20
+max_idle_conns = 10
+conn_max_lifetime_seconds = 300
+
 [room]
 default_id = "1001"

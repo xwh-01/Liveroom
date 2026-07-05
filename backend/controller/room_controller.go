@@ -2,7 +2,9 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
 
+	"liveroom-battle/dao"
 	"liveroom-battle/service"
 	"liveroom-battle/utils"
 
@@ -10,14 +12,16 @@ import (
 )
 
 type RoomController struct {
-	roomSvc *service.RoomService
-	rankSvc *service.RankService
+	roomSvc   *service.RoomService
+	rankSvc   *service.RankService
+	recordDao *dao.RecordDao
 }
 
-func NewRoomController(roomSvc *service.RoomService, rankSvc *service.RankService) *RoomController {
+func NewRoomController(roomSvc *service.RoomService, rankSvc *service.RankService, recordDao *dao.RecordDao) *RoomController {
 	return &RoomController{
-		roomSvc: roomSvc,
-		rankSvc: rankSvc,
+		roomSvc:   roomSvc,
+		rankSvc:   rankSvc,
+		recordDao: recordDao,
 	}
 }
 
@@ -43,4 +47,56 @@ func (c *RoomController) GetRank(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, utils.Success(rankings))
+}
+
+func (c *RoomController) ListRecentChats(ctx *gin.Context) {
+	roomID := ctx.Query("room_id")
+	if roomID == "" {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	limit := 20
+	if l := ctx.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	records, err := c.recordDao.ListRecentChatRecords(ctx.Request.Context(), roomID, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(records))
+}
+
+func (c *RoomController) ListRecentGifts(ctx *gin.Context) {
+	roomID := ctx.Query("room_id")
+	if roomID == "" {
+		ctx.JSON(http.StatusBadRequest, utils.ErrBadRequest)
+		return
+	}
+	limit := 20
+	if l := ctx.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	records, err := c.recordDao.ListRecentGiftRecords(ctx.Request.Context(), roomID, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, utils.ErrInternal)
+		return
+	}
+	ctx.JSON(http.StatusOK, utils.Success(records))
 }

@@ -29,13 +29,21 @@ func main() {
 	rdb := common.InitRedis(config.Cfg.Redis)
 	redisDao := dao.NewRedisDao(rdb)
 
+	db := common.InitMySQL(config.Cfg.MySQL)
+	recordDao := dao.NewRecordDao(db)
+
 	roomHub := hub.NewRoomHub()
 
-	roomSvc := service.NewRoomService(redisDao, roomHub)
+	persistSvc := service.NewPersistService(recordDao, 10000)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	persistSvc.Start(ctx, 2)
+
+	roomSvc := service.NewRoomService(redisDao, roomHub, persistSvc)
 	rateLimitSvc := service.NewRateLimitService(redisDao, 5)
 	rankSvc := service.NewRankService(redisDao)
-	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao)
-	giftSvc := service.NewGiftService(redisDao, roomHub)
+	chatSvc := service.NewChatService(rateLimitSvc, roomHub, redisDao, persistSvc)
+	giftSvc := service.NewGiftService(redisDao, roomHub, persistSvc)
 
 	dispatcher := service.NewMessageDispatcher()
 	dispatcher.Register("chat", func(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -46,7 +54,7 @@ func main() {
 	})
 
 	wsCtrl := controller.NewWSController(dispatcher, roomSvc)
-	roomCtrl := controller.NewRoomController(roomSvc, rankSvc)
+	roomCtrl := controller.NewRoomController(roomSvc, rankSvc, recordDao)
 
 	r := router.Setup(wsCtrl, roomCtrl)
 

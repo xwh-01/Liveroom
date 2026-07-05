@@ -44,7 +44,7 @@ func (h *RoomHub) Leave(roomID string, client *model.Client) {
 	slog.Info("client left", "room_id", roomID, "user_id", client.UserID)
 }
 
-func (h *RoomHub) Broadcast(roomID string, message []byte) {
+func (h *RoomHub) Broadcast(roomID string, messageType string, message []byte) {
 	start := time.Now()
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -53,7 +53,7 @@ func (h *RoomHub) Broadcast(roomID string, message []byte) {
 	if !ok {
 		return
 	}
-	count := len(clients)
+	target := len(clients)
 	dropped := 0
 	for client := range clients {
 		select {
@@ -64,8 +64,14 @@ func (h *RoomHub) Broadcast(roomID string, message []byte) {
 		}
 	}
 	elapsed := time.Since(start)
-	if elapsed > 10*time.Millisecond {
-		slog.Info("broadcast done", "room_id", roomID, "clients", count, "dropped", dropped, "latency_us", elapsed.Microseconds())
+	if target > 0 {
+		slog.Info("broadcast finished",
+			"room_id", roomID,
+			"type", messageType,
+			"target_clients", target,
+			"dropped_clients", dropped,
+			"latency_us", elapsed.Microseconds(),
+		)
 	}
 }
 

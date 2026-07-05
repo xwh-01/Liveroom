@@ -22,6 +22,12 @@ vue-frontend/dist/
 *.swp
 *.swo
 
+# Logs
+*.log
+
+# Media
+vue-frontend/public/*.mp4
+
 # OS
 .DS_Store
 Thumbs.db

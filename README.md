@@ -1,6 +1,6 @@
 # LiveRoom Battle
 
-直播间实时互动系统 V1.1 —— 基于 WebSocket + Redis 实现弹幕、礼物、排行榜、限流、在线人数统计。
+直播间实时互动系统 V2 —— 基于 WebSocket + Redis + MySQL 实现弹幕、礼物、排行榜、限流、在线人数统计及数据持久化。
 
 **注意：本项目不包含真实音视频直播功能（无 RTMP / HLS / WebRTC），页面中仅为假直播画面。**
 
@@ -11,6 +11,8 @@
 - Gin (HTTP 路由)
 - gorilla/websocket (WebSocket)
 - Redis (限流、排行榜、在线人数)
+- MySQL (弹幕记录、礼物流水持久化)
+- database/sql + go-sql-driver/mysql
 - TOML 配置
 - slog 日志
 
@@ -30,27 +32,31 @@ LiveRoom-Battle/
 │   ├── go.mod / go.sum
 │   ├── common/                  # 基础设施初始化
 │   │   ├── redis.go             # Redis 连接
+│   │   ├── mysql.go             # MySQL 连接
 │   │   └── websocket.go         # WebSocket upgrader
 │   ├── config/
 │   │   ├── config.go            # 配置结构体
 │   │   └── config.toml          # TOML 配置文件
 │   ├── controller/              # HTTP / WebSocket 入口
 │   │   ├── ws_controller.go     # WebSocket 处理器
-│   │   └── room_controller.go   # 房间状态 / 排行榜 HTTP 接口
+│   │   └── room_controller.go   # 房间状态 / 排行榜 / 流水查询 HTTP 接口
 │   ├── service/                 # 业务逻辑层
 │   │   ├── chat_service.go      # 弹幕处理
 │   │   ├── gift_service.go      # 礼物处理
 │   │   ├── rank_service.go      # 排行榜
 │   │   ├── room_service.go      # 房间管理
 │   │   ├── rate_limit_service.go # 限流
-│   │   └── dispatcher.go        # 消息分发器
+│   │   ├── dispatcher.go        # 消息分发器
+│   │   └── persist_service.go   # 异步落库服务
 │   ├── dao/                     # 数据访问层
-│   │   └── redis_dao.go         # Redis 操作封装
+│   │   ├── redis_dao.go         # Redis 操作封装
+│   │   └── record_dao.go        # MySQL 操作封装
 │   ├── model/                   # 数据结构
 │   │   ├── message.go           # WS 消息类型
 │   │   ├── room.go              # 房间状态 (API 响应)
 │   │   ├── gift.go              # 礼物配置
 │   │   ├── client.go            # WebSocket 客户端
+│   │   └── record.go            # 持久化记录模型
 │   ├── hub/
 │   │   └── room_hub.go          # 单机内存房间管理器
 │   ├── router/
@@ -61,6 +67,8 @@ LiveRoom-Battle/
 │   │   ├── response.go          # 统一响应
 │   │   ├── keygen.go            # Redis key 生成
 │   │   └── time.go              # 时间工具
+│   ├── sql/
+│   │   └── 001_init_records.sql # MySQL 建表脚本
 │   └── bot/
 │       ├── go.mod
 │       └── main.go              # Bot 模拟用户脚本
@@ -79,7 +87,10 @@ LiveRoom-Battle/
 │   ├── package.json
 │   └── vite.config.js
 ├── docs/
-│   └── benchmark.md             # 压测指南
+│   ├── benchmark.md             # 压测指南
+│   ├── benchmark-result.md      # 压测结果模板
+│   ├── architecture.md          # 架构设计文档
+│   └── demo.md                  # 功能演示验证指南
 └── README.md
 ```
 
@@ -88,17 +99,24 @@ LiveRoom-Battle/
 ### 前提条件
 - Go 1.21+
 - Redis（监听 127.0.0.1:6379）
+- MySQL（监听 127.0.0.1:3306）
 - Node.js 18+
 
-### 1. 启动 Redis
+### 1. 初始化 MySQL
+
+```bash
+mysql -uroot -p < backend/sql/001_init_records.sql
+```
+
+可修改 `backend/config/config.toml` 中的 MySQL 连接地址和账号密码。
+
+### 2. 启动 Redis
 
 ```bash
 redis-server
 ```
 
-可修改 `backend/config/config.toml` 中的 Redis 连接地址。
-
-### 2. 启动后端
+### 3. 启动后端
 
 ```bash
 cd backend
@@ -107,7 +125,7 @@ go run main.go
 
 服务启动在 `http://localhost:8080`。
 
-### 3. 启动前端
+### 4. 启动前端
 
 ```bash
 cd vue-frontend
@@ -117,7 +135,7 @@ npm run dev
 
 前端启动在 `http://localhost:3000`，通过 Vite 代理转发 API 到后端。
 
-### 4. 运行 Bot 模拟用户
+### 5. 运行 Bot 模拟用户
 
 ```bash
 cd backend/bot
@@ -167,8 +185,22 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 | `limited_count` | int | 累计限流次数（来自 Redis） |
 | `chat_count` | int64 | 累计弹幕数（来自 Redis） |
 | `gift_count` | int64 | 累计礼物数（来自 Redis） |
+| `persist_dropped_count` | int64 | 异步落库丢弃次数（V2 新增） |
 
-### 6. 可观测指标
+### 6. MySQL 持久化弹幕和礼物流水（V2 新增）
+
+- chat 消息广播成功后，异步写入 MySQL `chat_records` 表
+- gift 消息处理成功后，异步写入 MySQL `gift_records` 表
+- 落库使用本机异步队列（默认队列大小 10000，2 个 worker）
+- 落库失败不影响 WebSocket 广播
+- 队列满时丢弃事件，记录 `dropped_persist_count` 并打印 warn 日志
+
+新增 HTTP 接口：
+
+- `GET /api/room/chats?room_id=xxx&limit=20` — 查询最近弹幕记录
+- `GET /api/room/gifts?room_id=xxx&limit=20` — 查询最近礼物流水
+
+### 7. 可观测指标
 
 | 指标 | 存储 | 暴露方式 |
 |------|------|----------|
@@ -176,6 +208,9 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 | 限流次数 | Redis | `/api/room/state` |
 | chat_count | Redis | `/api/room/state` |
 | gift_count | Redis | `/api/room/state` |
+| persist_dropped_count | PersistService 内存 | `/api/room/state` |
+| 弹幕流水 | MySQL | `/api/room/chats` |
+| 礼物流水 | MySQL | `/api/room/gifts` |
 | 广播延迟 | slog 日志 | >10ms 时打印 `latency_us` |
 | 消息丢弃 | slog 日志 | send buffer 满时 Warn |
 
@@ -201,10 +236,12 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 - **分层清晰**：controller → service → dao，各层职责明确
 - **依赖注入**：服务之间通过构造函数注入，不使用全局变量
 - **消息分发器**：可扩展的消息类型注册机制，方便增加新消息类型
+- **异步落库**：ChatService/GiftService -> PersistService queue -> Persist worker -> RecordDao -> MySQL，落库失败不影响实时广播
 - **Redis key 统一管理**：通过 `utils/keygen.go` 集中生成
 - **礼物配置集中**：礼物类型和分值在 `model/gift.go` 中管理
 - **RoomHub 接口化**：内存房间管理器有清晰接口，后续可升级为分布式
 - **WebSocket 读写分离**：每个连接独立的 readPump / writePump 协程
+- **广播可观测**：bot 模拟多用户并发接入，广播日志记录 target_clients、dropped_clients、latency_us
 
 ## 后续扩展路线
 
@@ -212,7 +249,8 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 |------|------|------|
 | V1 | WebSocket + Redis 排行榜 + Redis 限流 | Done |
 | V1.1 | 内存可观测指标、增强 /api/room/state、bot CLI 参数、压测指南 | Done |
-| V2 | MySQL 保存弹幕记录和礼物流水 | TODO |
+| V1.2 | Broadcast 可观测日志、压测结果模板 benchmark-result.md | Done |
+| V2 | MySQL 持久化弹幕记录和礼物流水 | Done |
 | V3 | RabbitMQ 异步落库，解耦写入 | TODO |
 | V4 | Prometheus + Grafana 监控 | TODO |
 | V5 | 微服务拆分 | TODO |
@@ -220,12 +258,18 @@ go run main.go -host=localhost:8080 -room_id=1001 -user_count=50 -duration_secon
 
 ## 当前不包含
 
-- MySQL / PostgreSQL 持久化
 - RabbitMQ / Kafka 消息队列
 - 微服务拆分 / 服务注册发现
 - 登录注册 / 权限系统
 - 真实音视频直播（RTMP / HLS / WebRTC）
 - AI Agent
+
+## 文档
+
+- [docs/benchmark.md](docs/benchmark.md) — 压测指南
+- [docs/benchmark-result.md](docs/benchmark-result.md) — 压测结果模板
+- [docs/architecture.md](docs/architecture.md) — 架构设计文档
+- [docs/demo.md](docs/demo.md) — 功能演示验证指南
 
 ## License
 

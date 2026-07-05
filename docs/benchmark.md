@@ -90,8 +90,24 @@ go run main.go \
 
 ### 广播延迟
 
-后端日志中会打印每次广播的延迟（超过 10ms 时）：
+后端日志中每次广播（target_clients > 0）会打印结构化日志：
 
 ```
-INFO broadcast done room_id=1001 clients=50 dropped=0 latency_us=1234
+INFO broadcast finished room_id=1001 type=chat target_clients=50 dropped_clients=0 latency_us=530
+INFO broadcast finished room_id=1001 type=online target_clients=20 dropped_clients=0 latency_us=120
 ```
+
+| 字段 | 说明 |
+|------|------|
+| `type` | 消息类型：chat / gift / rank / online |
+| `target_clients` | 本次广播目标连接数 |
+| `dropped_clients` | 因 send buffer 满而丢弃的数量 |
+| `latency_us` | 广播耗时（微秒） |
+
+## 压测结果记录
+
+1. 执行压测后，打开 `docs/benchmark-result.md` 填写实际数据
+2. 把 bot 输出的统计结果填入 Result Summary 表格
+3. 调用 `curl localhost:8080/api/room/state?room_id=1001` 记录 chat_count / gift_count / limited_count
+4. 调用 `curl localhost:8080/api/room/rank?room_id=1001` 记录排行榜 TOP10
+5. 从后端日志摘取 `broadcast finished` 行，记录 target_clients / dropped_clients / latency_us

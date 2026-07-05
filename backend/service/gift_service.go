@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"liveroom-battle/dao"
 	"liveroom-battle/model"
 )
 
 type GiftService struct {
-	redisDao *dao.RedisDao
-	hub      HubInterface
+	redisDao   *dao.RedisDao
+	hub        HubInterface
+	persistSvc *PersistService
 }
 
-func NewGiftService(redisDao *dao.RedisDao, hub HubInterface) *GiftService {
-	return &GiftService{redisDao: redisDao, hub: hub}
+func NewGiftService(redisDao *dao.RedisDao, hub HubInterface, persistSvc *PersistService) *GiftService {
+	return &GiftService{redisDao: redisDao, hub: hub, persistSvc: persistSvc}
 }
 
 func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg *model.Message) {
@@ -39,7 +41,7 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 	giftData.GiftScore = score
 	giftData.Sender = msg.UserID
 	payload, _ := model.NewResponse("gift", msg.RoomID, msg.UserID, giftData)
-	s.hub.Broadcast(msg.RoomID, payload)
+	s.hub.Broadcast(msg.RoomID, "gift", payload)
 
 	rankings, err := s.redisDao.GetTopRank(ctx, msg.RoomID, 10)
 	if err != nil {
@@ -48,9 +50,20 @@ func (s *GiftService) HandleGift(ctx context.Context, client *model.Client, msg 
 	}
 
 	rankPayload, _ := model.NewResponse("rank", msg.RoomID, "", model.RankData{Rankings: rankings})
-	s.hub.Broadcast(msg.RoomID, rankPayload)
+	s.hub.Broadcast(msg.RoomID, "rank", rankPayload)
 
 	if _, err := s.redisDao.IncrGiftCount(ctx, msg.RoomID); err != nil {
 		slog.Error("incr gift count failed", "err", err)
+	}
+
+	if s.persistSvc != nil {
+		s.persistSvc.Submit(model.PersistEvent{
+			Type:      "gift",
+			RoomID:    msg.RoomID,
+			UserID:    msg.UserID,
+			GiftType:  giftData.GiftType,
+			GiftScore: score,
+			CreatedAt: time.Now(),
+		})
 	}
 }

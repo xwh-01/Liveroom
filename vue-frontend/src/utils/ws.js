@@ -86,11 +86,7 @@ export class LiveWSClient {
 
   disconnect() {
     if (this.ws) {
-      this.ws.onclose = null
-      this.ws.onerror = null
-      this.ws.onmessage = null
-      this.ws.onopen = null
-      this.ws.close()
+      this.ws.close(1000, 'user disconnect')
       this.ws = null
     }
   }
